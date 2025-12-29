@@ -3,6 +3,8 @@ import { v4 as uuidv4 } from 'uuid';
 import docClient, { TABLES } from '../dynamodb.js';
 import redis from '../redis.js';
 import { getScooterById, updateScooterStatus } from './scooterService.js';
+import { getActivationFee } from './pricingService.js';
+import { deductFromWallet } from './userService.js';
 
 // Czas rezerwacji w sekundach (domyślnie 5 minut)
 const RESERVATION_TTL = 300;
@@ -36,6 +38,7 @@ export async function createReservation(userId, scooterId) {
       throw new Error('Hulajnoga jest już zarezerwowana');
     }
 
+    // Rezerwacja jest darmowa - tylko blokuje hulajnogę na 5 minut
     const reservationId = uuidv4();
     const now = new Date().toISOString();
     const expiresAt = new Date(Date.now() + RESERVATION_TTL * 1000).toISOString();
@@ -45,6 +48,7 @@ export async function createReservation(userId, scooterId) {
       userId,
       scooterId,
       status: 'active', // active, completed, cancelled, expired
+      price: 0, // Rezerwacja darmowa
       createdAt: now,
       expiresAt,
     };
@@ -67,6 +71,7 @@ export async function createReservation(userId, scooterId) {
     return {
       ...reservation,
       expiresIn: RESERVATION_TTL,
+      price: 0, // Rezerwacja darmowa
     };
   } catch (error) {
     console.error('Błąd tworzenia rezerwacji:', error);
@@ -239,6 +244,10 @@ export async function startRide(reservationId, userId) {
       throw new Error('Rezerwacja nie jest aktywna');
     }
 
+    // Pobierz opłatę aktywacyjną i sprawdź portfel
+    const activationFee = await getActivationFee();
+    await deductFromWallet(userId, activationFee);
+
     // Aktualizuj status rezerwacji
     const updateReservationCommand = new UpdateCommand({
       TableName: TABLES.RESERVATIONS,
@@ -268,6 +277,9 @@ export async function startRide(reservationId, userId) {
       status: 'active', // active, completed
       startedAt: now,
       startBattery: 0, // Zostanie zaktualizowane
+      activationFee, // Opłata aktywacyjna
+      lastChargedMinutes: 0, // Ostatnia minuta za którą pobrano opłatę
+      totalCharged: activationFee, // Całkowita pobrana opłata (włącznie z opłatą aktywacyjną)
     };
 
     const createRideCommand = new PutCommand({

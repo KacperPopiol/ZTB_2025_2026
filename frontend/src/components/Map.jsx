@@ -1,98 +1,50 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   MapContainer,
   TileLayer,
   useMap,
-  Popup,
   useMapEvents,
 } from "react-leaflet";
-import L from "leaflet";
 import { getScooters } from "../services/api";
-import ScooterPopup from "./ScooterPopup";
+import ScooterMarker from "./ScooterMarker";
 
-// Custom marker icon
-const createMarkerIcon = (color) => {
-  return L.divIcon({
-    className: `scooter-marker ${color}`,
-    html: `<span style="font-size: 1.5rem">🛴</span>`,
-    iconSize: [40, 40],
-  });
-};
-
-function MapEventsHandler({ onMapMove, minBattery }) {
+function MapEventsHandler({ onMapMove, minBattery, status, model, sortBy }) {
   const map = useMap();
 
   useMapEvents({
     moveend: () => {
       const center = map.getCenter();
-      onMapMove(center.lat, center.lng, minBattery);
+      onMapMove(center.lat, center.lng, minBattery, status, model, sortBy);
     },
     zoomend: () => {
       const center = map.getCenter();
-      onMapMove(center.lat, center.lng, minBattery);
+      onMapMove(center.lat, center.lng, minBattery, status, model, sortBy);
     },
   });
 
   return null;
 }
 
-function MarkerCluster({
-  scooters,
-  selectedScooter,
-  setSelectedScooter,
-  onRefresh,
-}) {
-  const map = useMap();
-
-  useEffect(() => {
-    // Wyczyść poprzednie markery
-    map.eachLayer((layer) => {
-      if (layer instanceof L.Marker) {
-        map.removeLayer(layer);
-      }
-    });
-
-    // Dodaj nowe markery
-    scooters.forEach((scooter) => {
-      // Użyj współrzędnych z danych hulajnogi
-      const lat = parseFloat(scooter.latitude) || 50.0647;
-      const lon = parseFloat(scooter.longitude) || 19.945;
-
-      const marker = L.marker([lat, lon], {
-        icon: createMarkerIcon(
-          scooter.status === "reserved" ? "reserved" : "available",
-        ),
-      })
-        .bindPopup(
-          L.popup({ maxWidth: 400 }).setContent(
-            document.createElement("div"), // Placeholder
-          ),
-        )
-        .on("click", () => {
-          setSelectedScooter(scooter);
-        });
-
-      marker.addTo(map);
-    });
-  }, [scooters, map]);
-
-  return null;
-}
-
-export default function Map({ minBattery, onRefresh }) {
+export default function Map({ minBattery, status, model, sortBy }) {
   const [scooters, setScooters] = useState([]);
-  const [selectedScooter, setSelectedScooter] = useState(null);
   const [loading, setLoading] = useState(false);
-  const mapRef = useRef(null);
 
   // Domyślne współrzędne (Kraków)
   const DEFAULT_LAT = 50.0647;
   const DEFAULT_LON = 19.945;
 
-  const handleMapMove = async (lat, lon, battery) => {
+  const handleMapMove = async (lat, lon, battery, statusFilter, modelFilter, sortByFilter) => {
     setLoading(true);
     try {
-      const response = await getScooters(lat, lon, 500, battery);
+      const response = await getScooters(
+        lat,
+        lon,
+        500,
+        battery,
+        statusFilter || status,
+        modelFilter || model || null,
+        sortByFilter || sortBy || null
+      );
       setScooters(response.scooters || []);
     } catch (error) {
       console.error("Błąd pobierania hulajnóg:", error);
@@ -102,9 +54,9 @@ export default function Map({ minBattery, onRefresh }) {
   };
 
   useEffect(() => {
-    // Pobierz hulajnogi przy załadowaniu
-    handleMapMove(DEFAULT_LAT, DEFAULT_LON, minBattery);
-  }, [minBattery]);
+    // Pobierz hulajnogi przy załadowaniu lub zmianie filtrów
+    handleMapMove(DEFAULT_LAT, DEFAULT_LON, minBattery, status, model || "", sortBy || "");
+  }, [minBattery, status, model, sortBy]);
 
   return (
     <div className="relative h-full w-full">
@@ -118,40 +70,28 @@ export default function Map({ minBattery, onRefresh }) {
         center={[DEFAULT_LAT, DEFAULT_LON]}
         zoom={14}
         className="h-full w-full"
-        ref={mapRef}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <MapEventsHandler onMapMove={handleMapMove} minBattery={minBattery} />
-        <MarkerCluster
-          scooters={scooters}
-          selectedScooter={selectedScooter}
-          setSelectedScooter={setSelectedScooter}
-          onRefresh={onRefresh}
+        <MapEventsHandler
+          onMapMove={handleMapMove}
+          minBattery={minBattery}
+          status={status}
+          model={model}
+          sortBy={sortBy}
         />
+        {scooters.map((scooter) => (
+          <ScooterMarker
+            key={scooter.scooterId}
+            scooter={scooter}
+            onReserved={() =>
+              handleMapMove(DEFAULT_LAT, DEFAULT_LON, minBattery, status, model || "", sortBy || "")
+            }
+          />
+        ))}
       </MapContainer>
-
-      {selectedScooter && (
-        <div className="absolute bottom-6 left-6 z-">
-          <div className="bg-white rounded-lg shadow-2xl overflow-hidden">
-            <button
-              onClick={() => setSelectedScooter(null)}
-              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 z-10"
-            >
-              ✕
-            </button>
-            <ScooterPopup
-              scooter={selectedScooter}
-              onClose={() => setSelectedScooter(null)}
-              onReserved={() =>
-                handleMapMove(DEFAULT_LAT, DEFAULT_LON, minBattery)
-              }
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

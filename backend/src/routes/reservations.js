@@ -38,7 +38,8 @@ router.post('/', authenticateToken, requireUser, async (req, res) => {
       error.message.includes('nie została znaleziona') ||
       error.message.includes('nie jest dostępna') ||
       error.message.includes('już aktywną rezerwację') ||
-      error.message.includes('już zarezerwowana')
+      error.message.includes('już zarezerwowana') ||
+      error.message.includes('Niewystarczające środki')
     ) {
       return res.status(400).json({ error: error.message });
     }

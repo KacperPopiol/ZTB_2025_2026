@@ -9,11 +9,25 @@ import { isAuthenticated } from "./services/api";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import Profile from "./pages/Profile";
+import AdminPanel from "./pages/AdminPanel";
+import { isAdmin } from "./services/api";
 
 // Protected Route Component
 function ProtectedRoute({ children }) {
   if (!isAuthenticated()) {
     return <Navigate to="/login" replace />;
+  }
+  return children;
+}
+
+// Admin Route Component
+function AdminRoute({ children }) {
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" replace />;
+  }
+  if (!isAdmin()) {
+    return <Navigate to="/" replace />;
   }
   return children;
 }
@@ -28,7 +42,12 @@ function PublicRoute({ children }) {
 
 function App() {
   return (
-    <Router>
+    <Router
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <div className="min-h-screen bg-gray-100">
         <Routes>
           {/* Public Routes */}
@@ -56,6 +75,22 @@ function App() {
               <ProtectedRoute>
                 <Home />
               </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>
+                <AdminPanel />
+              </AdminRoute>
             }
           />
 

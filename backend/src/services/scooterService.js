@@ -143,7 +143,14 @@ export async function getScootersByStatus(status, limit = 100) {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Pobierz hulajnogi w promieniu (używa Redis GEO)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-export async function getScootersNearby(latitude, longitude, radius = 500, minBattery = 0) {
+export async function getScootersNearby(
+  latitude,
+  longitude,
+  radius = 500,
+  minBattery = 0,
+  status = 'available',
+  model = null
+) {
   try {
     // Użyj Redis GEOSEARCH dla szybkiego wyszukiwania
     const scooterIds = await redis.geosearch(
@@ -169,10 +176,14 @@ export async function getScootersNearby(latitude, longitude, radius = 500, minBa
       })
     );
 
-    // Filtruj po baterii i statusie
-    const filtered = scooters.filter(
-      (s) => s && s.battery >= minBattery && s.status === 'available'
-    );
+    // Filtruj po baterii, statusie i modelu
+    const filtered = scooters.filter((s) => {
+      if (!s) return false;
+      if (s.battery < minBattery) return false;
+      if (status && s.status !== status) return false;
+      if (model && s.model !== model) return false;
+      return true;
+    });
 
     return filtered;
   } catch (error) {
@@ -293,6 +304,38 @@ export async function updateScooterBattery(scooterId, battery) {
     return await updateScooter(scooterId, { battery });
   } catch (error) {
     console.error('Błąd aktualizacji baterii hulajnogi:', error);
+    throw error;
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Pobierz listę dostępnych modeli
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+export async function getAvailableModels() {
+  try {
+    const cacheKey = 'scooters:models';
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+
+    const command = new ScanCommand({
+      TableName: TABLES.SCOOTERS,
+      ProjectionExpression: 'model',
+    });
+
+    const response = await docClient.send(command);
+    const scooters = response.Items || [];
+
+    // Wyciągnij unikalne modele
+    const models = [...new Set(scooters.map((s) => s.model).filter(Boolean))].sort();
+
+    // Zapisz w cache na 5 minut
+    await redis.setex(cacheKey, 300, JSON.stringify(models));
+
+    return models;
+  } catch (error) {
+    console.error('Błąd pobierania modeli:', error);
     throw error;
   }
 }

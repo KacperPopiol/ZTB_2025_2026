@@ -116,10 +116,24 @@ export const deleteUser = async (userId) => {
 // HULAJNOGI
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-export const getScooters = async (lat, lon, radius = 500, minBattery = 0) => {
-  const response = await api.get("/scooters", {
-    params: { lat, lon, radius, minBattery },
-  });
+export const getScooters = async (
+  lat,
+  lon,
+  radius = 500,
+  minBattery = 0,
+  status = "available",
+  model = null,
+  sortBy = null
+) => {
+  const params = { lat, lon, radius, minBattery, status };
+  if (model) params.model = model;
+  if (sortBy) params.sortBy = sortBy;
+  const response = await api.get("/scooters", { params });
+  return response.data;
+};
+
+export const getScooterModels = async () => {
+  const response = await api.get("/scooters/models");
   return response.data;
 };
 
@@ -130,6 +144,11 @@ export const getScooter = async (scooterId) => {
 
 export const getScooterStats = async () => {
   const response = await api.get("/scooters/stats");
+  return response.data;
+};
+
+export const getAllScooters = async (limit = 100) => {
+  const response = await api.get("/scooters", { params: { limit } });
   return response.data;
 };
 
@@ -192,6 +211,32 @@ export const startRide = async (reservationId) => {
 };
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// JAZDY
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export const getMyRide = async () => {
+  const response = await api.get("/rides/me");
+  return response.data;
+};
+
+export const getRideHistory = async (limit = 20) => {
+  const response = await api.get("/rides/history", {
+    params: { limit },
+  });
+  return response.data;
+};
+
+export const getRide = async (rideId) => {
+  const response = await api.get(`/rides/${rideId}`);
+  return response.data;
+};
+
+export const endRide = async (rideId) => {
+  const response = await api.post(`/rides/${rideId}/end`);
+  return response.data;
+};
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // UTILITY
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -203,6 +248,29 @@ export const initDatabase = async (reset = false) => {
 
 export const seedData = async () => {
   const response = await api.post("/seed");
+  return response.data;
+};
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// CENY
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export const getPricing = async () => {
+  const response = await api.get("/pricing");
+  return response.data;
+};
+
+export const updatePricing = async (pricing) => {
+  const response = await api.put("/pricing", pricing);
+  return response.data;
+};
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// PORTFEL
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export const topUpWallet = async (amount) => {
+  const response = await api.post("/users/me/wallet", { amount });
   return response.data;
 };
 

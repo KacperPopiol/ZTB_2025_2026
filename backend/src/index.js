@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import apiRoutes from "./routes/api.js";
 import { checkDynamoDBConnection } from "./dynamodb.js";
 import redis from "./redis.js";
+import { chargeForActiveRides } from "./services/rideService.js";
 
 dotenv.config();
 
@@ -63,7 +64,34 @@ app.listen(PORT, async () => {
      - POST /api/reservations      - Utwórz rezerwację
      - GET  /api/users/me          - Twój profil
   `);
+
+  // Uruchom interwał do pobierania opłat co minutę
+  startRideChargingInterval();
 });
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Interwał do pobierania opłat za aktywne jazdy (co minutę)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function startRideChargingInterval() {
+  // Pobierz opłaty natychmiast przy starcie
+  chargeForActiveRides().catch((error) => {
+    console.error('Błąd pobierania opłat przy starcie:', error);
+  });
+
+  // Następnie pobieraj opłaty co minutę (60000 ms)
+  setInterval(async () => {
+    try {
+      const result = await chargeForActiveRides();
+      if (result.charged > 0 || result.ended > 0) {
+        console.log(`💰 Pobrano opłaty: ${result.charged} jazd, zakończono: ${result.ended} jazd (brak środków)`);
+      }
+    } catch (error) {
+      console.error('Błąd pobierania opłat za aktywne jazdy:', error);
+    }
+  }, 60000); // 60 sekund = 1 minuta
+
+  console.log('✅ Interwał pobierania opłat za jazdy uruchomiony (co 1 minutę)');
+}
 
 // Graceful shutdown
 process.on("SIGTERM", () => {

@@ -3,6 +3,8 @@ import authRoutes from "./auth.js";
 import userRoutes from "./users.js";
 import scooterRoutes from "./scooters.js";
 import reservationRoutes from "./reservations.js";
+import pricingRoutes from "./pricing.js";
+import rideRoutes from "./rides.js";
 import { initializeDynamoDB } from "../utils/initDynamoDB.js";
 import { seedScooters } from "../utils/seedData.js";
 
@@ -23,6 +25,12 @@ router.use("/scooters", scooterRoutes);
 
 // Rezerwacje
 router.use("/reservations", reservationRoutes);
+
+// Ceny
+router.use("/pricing", pricingRoutes);
+
+// Jazdy
+router.use("/rides", rideRoutes);
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Utility Routes

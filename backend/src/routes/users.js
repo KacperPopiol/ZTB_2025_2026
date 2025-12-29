@@ -6,6 +6,7 @@ import {
   changePassword,
   deleteUser,
   getAllUsers,
+  topUpWallet,
 } from '../services/userService.js';
 
 const router = express.Router();
@@ -111,6 +112,28 @@ router.delete('/me', authenticateToken, requireUser, async (req, res) => {
   } catch (error) {
     console.error('Błąd usuwania konta:', error);
     res.status(500).json({ error: 'Błąd serwera' });
+  }
+});
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// POST /api/users/me/wallet - Doładowanie portfela
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+router.post('/me/wallet', authenticateToken, requireUser, async (req, res) => {
+  try {
+    const { amount } = req.body;
+    if (!amount || typeof amount !== 'number') {
+      return res.status(400).json({ error: 'Nieprawidłowa kwota' });
+    }
+
+    const user = await topUpWallet(req.user.userId, amount);
+    
+    res.json({
+      success: true,
+      message: `Doładowano portfel o ${amount} zł`,
+      walletBalance: user.walletBalance
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

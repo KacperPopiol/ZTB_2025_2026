@@ -28,6 +28,7 @@ export async function createUser({ email, password, firstName, lastName, role = 
       firstName,
       lastName,
       role, // 'user' lub 'admin'
+      walletBalance: 0,
       createdAt: now,
       updatedAt: now,
       isActive: true,
@@ -261,6 +262,76 @@ export async function getAllUsers(limit = 50) {
     };
   } catch (error) {
     console.error('Błąd pobierania użytkowników:', error);
+    throw error;
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Doładowanie portfela
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+export async function topUpWallet(userId, amount) {
+  try {
+    if (amount <= 0) throw new Error("Kwota musi być dodatnia");
+
+    const command = new UpdateCommand({
+      TableName: TABLES.USERS,
+      Key: { userId },
+      UpdateExpression: 'SET walletBalance = if_not_exists(walletBalance, :start) + :amount, updatedAt = :updatedAt',
+      ExpressionAttributeValues: {
+        ':start': 0,
+        ':amount': amount,
+        ':updatedAt': new Date().toISOString(),
+      },
+      ReturnValues: 'ALL_NEW',
+    });
+
+    const response = await docClient.send(command);
+    await redis.del(`user:${userId}`); // Czyścimy cache
+
+    const { password, ...userWithoutPassword } = response.Attributes;
+    return userWithoutPassword;
+  } catch (error) {
+    console.error('Błąd doładowania portfela:', error);
+    throw error;
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Odliczanie z portfela (płatność)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+export async function deductFromWallet(userId, amount) {
+  try {
+    if (amount <= 0) throw new Error("Kwota musi być dodatnia");
+
+    // Pobierz aktualny stan portfela
+    const user = await getUserById(userId);
+    if (!user) {
+      throw new Error('Użytkownik nie znaleziony');
+    }
+
+    const currentBalance = user.walletBalance || 0;
+    if (currentBalance < amount) {
+      throw new Error('Niewystarczające środki na koncie');
+    }
+
+    const command = new UpdateCommand({
+      TableName: TABLES.USERS,
+      Key: { userId },
+      UpdateExpression: 'SET walletBalance = walletBalance - :amount, updatedAt = :updatedAt',
+      ExpressionAttributeValues: {
+        ':amount': amount,
+        ':updatedAt': new Date().toISOString(),
+      },
+      ReturnValues: 'ALL_NEW',
+    });
+
+    const response = await docClient.send(command);
+    await redis.del(`user:${userId}`); // Czyścimy cache
+
+    const { password, ...userWithoutPassword } = response.Attributes;
+    return userWithoutPassword;
+  } catch (error) {
+    console.error('Błąd odliczania z portfela:', error);
     throw error;
   }
 }

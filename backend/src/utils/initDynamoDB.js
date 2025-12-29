@@ -4,6 +4,7 @@ import {
   DeleteTableCommand,
 } from '@aws-sdk/client-dynamodb';
 import { client, TABLES } from '../dynamodb.js';
+import { fileURLToPath } from 'url';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Definicje tabel
@@ -216,7 +217,7 @@ export async function initializeDynamoDB(reset = false) {
 }
 
 // Uruchom jeśli wywołano bezpośrednio
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const reset = process.argv.includes('--reset');
   initializeDynamoDB(reset)
     .then(() => process.exit(0))

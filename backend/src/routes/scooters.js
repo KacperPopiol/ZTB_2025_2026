@@ -11,6 +11,7 @@ import {
   updateScooterStatus,
   updateScooterBattery,
   getScooterStats,
+  getAvailableModels,
 } from '../services/scooterService.js';
 import { isScooterReserved } from '../services/reservationService.js';
 
@@ -23,7 +24,7 @@ const router = express.Router();
 // GET /api/scooters - Pobierz hulajnogi w promieniu (opcjonalna autentykacja)
 router.get('/', optionalAuth, async (req, res) => {
   try {
-    const { lat, lon, radius, minBattery } = req.query;
+    const { lat, lon, radius, minBattery, status, model, sortBy } = req.query;
 
     // Jeśli podano współrzędne, wyszukaj w promieniu
     if (lat && lon) {
@@ -31,12 +32,30 @@ router.get('/', optionalAuth, async (req, res) => {
       const longitude = parseFloat(lon);
       const radiusMeters = parseInt(radius) || 500;
       const minBatt = parseInt(minBattery) || 0;
+      const statusFilter = status || 'available';
+      const modelFilter = model || null;
 
       if (isNaN(latitude) || isNaN(longitude)) {
         return res.status(400).json({ error: 'Nieprawidłowe współrzędne' });
       }
 
-      const scooters = await getScootersNearby(latitude, longitude, radiusMeters, minBatt);
+      let scooters = await getScootersNearby(
+        latitude,
+        longitude,
+        radiusMeters,
+        minBatt,
+        statusFilter,
+        modelFilter
+      );
+
+      // Sortowanie
+      if (sortBy === 'battery') {
+        scooters.sort((a, b) => b.battery - a.battery);
+      } else if (sortBy === 'battery-asc') {
+        scooters.sort((a, b) => a.battery - b.battery);
+      } else if (sortBy === 'model') {
+        scooters.sort((a, b) => (a.model || '').localeCompare(b.model || ''));
+      }
 
       return res.json({
         success: true,
@@ -78,6 +97,21 @@ router.get('/stats', async (req, res) => {
     });
   } catch (error) {
     console.error('Błąd pobierania statystyk:', error);
+    res.status(500).json({ error: 'Błąd serwera' });
+  }
+});
+
+// GET /api/scooters/models - Pobierz listę dostępnych modeli
+router.get('/models', async (req, res) => {
+  try {
+    const models = await getAvailableModels();
+
+    res.json({
+      success: true,
+      models,
+    });
+  } catch (error) {
+    console.error('Błąd pobierania modeli:', error);
     res.status(500).json({ error: 'Błąd serwera' });
   }
 });

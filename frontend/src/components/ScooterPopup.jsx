@@ -1,10 +1,23 @@
-import React, { useState } from "react";
-import { createReservation, cancelReservation } from "../services/api";
+import React, { useState, useEffect } from "react";
+import { createReservation, cancelReservation, getPricing } from "../services/api";
 
 export default function ScooterPopup({ scooter, onClose, onReserved }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [reserved, setReserved] = useState(scooter.reserved || false);
+  const [pricing, setPricing] = useState(null);
+
+  useEffect(() => {
+    const loadPrice = async () => {
+      try {
+        const response = await getPricing();
+        setPricing(response.pricing);
+      } catch (error) {
+        console.error("Błąd ładowania ceny:", error);
+      }
+    };
+    loadPrice();
+  }, []);
 
   const handleReserve = async () => {
     setLoading(true);
@@ -36,8 +49,16 @@ export default function ScooterPopup({ scooter, onClose, onReserved }) {
     return "text-red-600";
   };
 
+  if (!scooter) {
+    return (
+      <div className="w-72 p-4">
+        <p className="text-gray-600">Ładowanie danych...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="w-72">
+    <div className="w-72 p-4">
       <h3 className="font-bold text-lg mb-3">{scooter.model || "Hulajnoga"}</h3>
 
       <div className="space-y-2 mb-4 text-sm">
@@ -72,6 +93,23 @@ export default function ScooterPopup({ scooter, onClose, onReserved }) {
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded mb-4 text-sm">
           {error}
+        </div>
+      )}
+
+      {pricing && (
+        <div className="mb-3 space-y-1 text-sm text-gray-600">
+          <div className="flex justify-between">
+            <span>Rezerwacja:</span>
+            <span className="font-semibold text-green-600">Darmowa</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Opłata aktywacyjna:</span>
+            <span className="font-semibold">{(pricing.activationFee || pricing.reservationPrice || 2.0).toFixed(2)} zł</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Cena za minutę jazdy:</span>
+            <span className="font-semibold text-blue-600">{pricing.ridePerMinute.toFixed(2)} zł</span>
+          </div>
         </div>
       )}
 
