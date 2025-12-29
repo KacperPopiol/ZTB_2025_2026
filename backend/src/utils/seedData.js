@@ -1,80 +1,225 @@
-import redis from '../redis.js';
-import { faker } from '@faker-js/faker';
+import { faker } from "@faker-js/faker";
+import bcrypt from "bcryptjs";
+import { v4 as uuidv4 } from "uuid";
+import docClient, { TABLES } from "../dynamodb.js";
+import redis from "../redis.js";
+import { PutCommand } from "@aws-sdk/lib-dynamodb";
 
 // Współrzędne: Kraków (centrum)
-const CITY_CENTER = { lat: 50.0647, lon: 19.9450 };
+const CITY_CENTER = { lat: 50.0647, lon: 19.945 };
 const CITY_RADIUS_KM = 2;
 
 function generateRandomCoordinates() {
   const latOffset = (Math.random() - 0.5) * (CITY_RADIUS_KM / 111);
   const lonOffset = (Math.random() - 0.5) * (CITY_RADIUS_KM / 111);
-  
+
   return {
     lat: CITY_CENTER.lat + latOffset,
     lon: CITY_CENTER.lon + lonOffset,
   };
 }
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Seedowanie użytkowników
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function seedUsers() {
+  console.log("👥 Tworzenie użytkowników...");
+
+  const hashedPassword = await bcrypt.hash("password123", 10);
+  const now = new Date().toISOString();
+
+  // Administrator
+  const admin = {
+    userId: uuidv4(),
+    email: "admin@ecoscoot.pl",
+    password: hashedPassword,
+    firstName: "Admin",
+    lastName: "System",
+    role: "admin",
+    createdAt: now,
+    updatedAt: now,
+    isActive: true,
+  };
+
+  const adminCommand = new PutCommand({
+    TableName: TABLES.USERS,
+    Item: admin,
+  });
+
+  await docClient.send(adminCommand);
+  console.log("✅ Administrator utworzony: admin@ecoscoot.pl / password123");
+
+  // Przykładowi użytkownicy
+  const users = [
+    {
+      userId: uuidv4(),
+      email: "jan.kowalski@example.com",
+      password: hashedPassword,
+      firstName: "Jan",
+      lastName: "Kowalski",
+      role: "user",
+      createdAt: now,
+      updatedAt: now,
+      isActive: true,
+    },
+    {
+      userId: uuidv4(),
+      email: "anna.nowak@example.com",
+      password: hashedPassword,
+      firstName: "Anna",
+      lastName: "Nowak",
+      role: "user",
+      createdAt: now,
+      updatedAt: now,
+      isActive: true,
+    },
+    {
+      userId: uuidv4(),
+      email: "piotr.wisniewski@example.com",
+      password: hashedPassword,
+      firstName: "Piotr",
+      lastName: "Wiśniewski",
+      role: "user",
+      createdAt: now,
+      updatedAt: now,
+      isActive: true,
+    },
+  ];
+
+  for (const user of users) {
+    const command = new PutCommand({
+      TableName: TABLES.USERS,
+      Item: user,
+    });
+    await docClient.send(command);
+  }
+
+  console.log(
+    `✅ ${users.length} użytkowników utworzonych (hasło dla wszystkich: password123)`,
+  );
+
+  return { admin, users };
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Seedowanie hulajnóg
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function seedScootersData() {
+  console.log("🛴 Tworzenie hulajnóg...");
+
+  // Wyczyść Redis GEO
+  await redis.del("scooters:locations");
+
+  const models = [
+    "Xiaomi Mi 3",
+    "Ninebot Max G30",
+    "Segway E45",
+    "Dualtron Thunder",
+  ];
+  const statuses = [
+    "available",
+    "available",
+    "available",
+    "available",
+    "maintenance",
+  ];
+  const scooters = [];
+
+  for (let i = 1; i <= 50; i++) {
+    const scooterId = uuidv4();
+    const { lat, lon } = generateRandomCoordinates();
+    const battery = Math.floor(Math.random() * 100) + 1; // 1-100%
+    const model = models[Math.floor(Math.random() * models.length)];
+    const status = statuses[Math.floor(Math.random() * statuses.length)];
+    const now = new Date().toISOString();
+
+    const scooter = {
+      scooterId,
+      model,
+      latitude: lat,
+      longitude: lon,
+      battery,
+      status,
+      createdAt: now,
+      updatedAt: now,
+      totalRides: Math.floor(Math.random() * 100),
+      totalDistance: Math.floor(Math.random() * 1000),
+    };
+
+    // Zapisz w DynamoDB
+    const command = new PutCommand({
+      TableName: TABLES.SCOOTERS,
+      Item: scooter,
+    });
+
+    await docClient.send(command);
+
+    // Dodaj do Redis GEO dla szybkiego wyszukiwania geograficznego
+    await redis.geoadd("scooters:locations", lon, lat, scooterId);
+
+    scooters.push(scooter);
+  }
+
+  console.log(`✅ ${scooters.length} hulajnóg utworzonych`);
+  return scooters;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Główna funkcja seedowania
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function seedScooters() {
   try {
-    // Czyszczenie bazy
-    await redis.flushdb();
-    console.log('🗑️ Baza czyszczona');
+    console.log("\n🌱 Rozpoczynam seedowanie danych...\n");
 
-    // Tworzenie 50 hulajnóg
-    for (let i = 1; i <= 50; i++) {
-      const scooterId = `scooter:${i}`;
-      const { lat, lon } = generateRandomCoordinates();
-      const battery = Math.floor(Math.random() * 100) + 1; // 1-100%
-      const models = ['Xiaomi 3', 'Ninebot Max', 'Segway', 'Dualtron'];
-      const model = models[Math.floor(Math.random() * models.length)];
-
-      // 1. Dodaj do GEO (mapy)
-      await redis.geoadd('scooters:locations', lon, lat, scooterId);
-
-      // 2. Dodaj szczegóły (HASH)
-      await redis.hset(scooterId, {
-        model,
-        battery,
-        status: 'available',
-        created_at: new Date().toISOString(),
-      });
+    // Wyczyść cache Redis
+    const keys = await redis.keys("scooter:*");
+    if (keys.length > 0) {
+      await redis.del(...keys);
     }
+    await redis.del("scooters:all:*");
+    await redis.del("scooters:stats");
 
-    console.log('✅ 50 hulajnóg wygenerowanych');
+    // Seeduj użytkowników
+    await seedUsers();
+
+    console.log("");
+
+    // Seeduj hulajnogi
+    await seedScootersData();
+
+    console.log("\n✅ Seedowanie zakończone pomyślnie!\n");
+    console.log("📝 Dane logowania:");
+    console.log("   Admin: admin@ecoscoot.pl / password123");
+    console.log("   User1: jan.kowalski@example.com / password123");
+    console.log("   User2: anna.nowak@example.com / password123");
+    console.log("   User3: piotr.wisniewski@example.com / password123\n");
+
+    return true;
   } catch (error) {
-    console.error('❌ Błąd seedowania:', error);
+    console.error("❌ Błąd seedowania:", error);
+    throw error;
   }
 }
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Funkcja pomocnicza do wyszukiwania hulajnóg w pobliżu (używana w testach)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function getScootersNearby(lat, lon, distance = 500) {
   try {
-    // GEOSEARCH - pobiera hulajnogi w promieniu distance metrów
-    const scooters = await redis.geosearch(
-      'scooters:locations',
-      'FROMMEMBER',
-      'scooter:1', // dummy
-      'BYRADIUS',
-      distance,
-      'm',
-      'WITHDIST',
-      'WITHCOORD'
-    );
-
-    // Alternatywa z użyciem FROMLONLAT (dokładniej)
     const result = await redis.geosearch(
-      'scooters:locations',
-      'FROMLONLAT',
+      "scooters:locations",
+      "FROMLONLAT",
       lon,
       lat,
-      'BYRADIUS',
+      "BYRADIUS",
       distance,
-      'm'
+      "m",
+      "ASC",
     );
 
     return result;
   } catch (error) {
-    console.error('❌ Błąd wyszukiwania:', error);
+    console.error("❌ Błąd wyszukiwania hulajnóg:", error);
     return [];
   }
 }

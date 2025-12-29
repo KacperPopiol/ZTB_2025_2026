@@ -1,8 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, useMap, Popup, useMapEvents } from 'react-leaflet';
-import L from 'leaflet';
-import { getScooters } from '../services/api';
-import ScooterPopup from './ScooterPopup';
+import React, { useState, useEffect, useRef } from "react";
+import {
+  MapContainer,
+  TileLayer,
+  useMap,
+  Popup,
+  useMapEvents,
+} from "react-leaflet";
+import L from "leaflet";
+import { getScooters } from "../services/api";
+import ScooterPopup from "./ScooterPopup";
 
 // Custom marker icon
 const createMarkerIcon = (color) => {
@@ -30,7 +36,12 @@ function MapEventsHandler({ onMapMove, minBattery }) {
   return null;
 }
 
-function MarkerCluster({ scooters, selectedScooter, setSelectedScooter, onRefresh }) {
+function MarkerCluster({
+  scooters,
+  selectedScooter,
+  setSelectedScooter,
+  onRefresh,
+}) {
   const map = useMap();
 
   useEffect(() => {
@@ -43,19 +54,21 @@ function MarkerCluster({ scooters, selectedScooter, setSelectedScooter, onRefres
 
     // Dodaj nowe markery
     scooters.forEach((scooter) => {
-      // Pobierz współrzędne z Redis
-      const lat = Math.random() * 0.1 + 50.0; // dummy
-      const lon = Math.random() * 0.1 + 19.9; // dummy
+      // Użyj współrzędnych z danych hulajnogi
+      const lat = parseFloat(scooter.latitude) || 50.0647;
+      const lon = parseFloat(scooter.longitude) || 19.945;
 
       const marker = L.marker([lat, lon], {
-        icon: createMarkerIcon(scooter.reserved ? 'reserved' : 'available'),
+        icon: createMarkerIcon(
+          scooter.status === "reserved" ? "reserved" : "available",
+        ),
       })
         .bindPopup(
           L.popup({ maxWidth: 400 }).setContent(
-            document.createElement('div') // Placeholder
-          )
+            document.createElement("div"), // Placeholder
+          ),
         )
-        .on('click', () => {
+        .on("click", () => {
           setSelectedScooter(scooter);
         });
 
@@ -74,15 +87,15 @@ export default function Map({ minBattery, onRefresh }) {
 
   // Domyślne współrzędne (Kraków)
   const DEFAULT_LAT = 50.0647;
-  const DEFAULT_LON = 19.9450;
+  const DEFAULT_LON = 19.945;
 
   const handleMapMove = async (lat, lon, battery) => {
     setLoading(true);
     try {
       const response = await getScooters(lat, lon, 500, battery);
-      setScooters(response.data.scooters);
+      setScooters(response.scooters || []);
     } catch (error) {
-      console.error('Błąd pobierania hulajnóg:', error);
+      console.error("Błąd pobierania hulajnóg:", error);
     } finally {
       setLoading(false);
     }
@@ -112,8 +125,8 @@ export default function Map({ minBattery, onRefresh }) {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <MapEventsHandler onMapMove={handleMapMove} minBattery={minBattery} />
-        <MarkerCluster 
-          scooters={scooters} 
+        <MarkerCluster
+          scooters={scooters}
           selectedScooter={selectedScooter}
           setSelectedScooter={setSelectedScooter}
           onRefresh={onRefresh}
@@ -129,10 +142,12 @@ export default function Map({ minBattery, onRefresh }) {
             >
               ✕
             </button>
-            <ScooterPopup 
-              scooter={selectedScooter} 
+            <ScooterPopup
+              scooter={selectedScooter}
               onClose={() => setSelectedScooter(null)}
-              onReserved={() => handleMapMove(DEFAULT_LAT, DEFAULT_LON, minBattery)}
+              onReserved={() =>
+                handleMapMove(DEFAULT_LAT, DEFAULT_LON, minBattery)
+              }
             />
           </div>
         </div>

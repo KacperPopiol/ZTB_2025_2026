@@ -1,29 +1,29 @@
-import React, { useState } from 'react';
-import { reserveScooter } from '../services/api';
+import React, { useState } from "react";
+import { createReservation, cancelReservation } from "../services/api";
 
 export default function ScooterPopup({ scooter, onClose, onReserved }) {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [reserved, setReserved] = useState(scooter.reserved || false);
 
   const handleReserve = async () => {
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
-      // Wygeneruj prosty user ID
-      const userId = `user_${Math.random().toString(36).substr(2, 9)}`;
-      
-      await reserveScooter(scooter.id, userId);
+      await createReservation(scooter.scooterId);
       setReserved(true);
       onReserved?.();
-      
-      // Automatycznie anuluj rezerwację po 5 minutach
-      setTimeout(() => {
-        setReserved(false);
-      }, 5 * 60 * 1000);
+
+      // Automatycznie odśwież po 5 minutach
+      setTimeout(
+        () => {
+          setReserved(false);
+        },
+        5 * 60 * 1000,
+      );
     } catch (err) {
-      setError(err.response?.data?.error || 'Błąd rezerwacji');
+      setError(err.response?.data?.error || "Błąd rezerwacji");
     } finally {
       setLoading(false);
     }
@@ -31,21 +31,21 @@ export default function ScooterPopup({ scooter, onClose, onReserved }) {
 
   const getBatteryColor = () => {
     const battery = parseInt(scooter.battery);
-    if (battery >= 70) return 'text-green-600';
-    if (battery >= 40) return 'text-yellow-600';
-    return 'text-red-600';
+    if (battery >= 70) return "text-green-600";
+    if (battery >= 40) return "text-yellow-600";
+    return "text-red-600";
   };
 
   return (
     <div className="w-72">
-      <h3 className="font-bold text-lg mb-3">{scooter.id}</h3>
-      
+      <h3 className="font-bold text-lg mb-3">{scooter.model || "Hulajnoga"}</h3>
+
       <div className="space-y-2 mb-4 text-sm">
         <div className="flex justify-between">
           <span className="text-gray-600">Model:</span>
-          <span className="font-semibold">{scooter.model || 'N/A'}</span>
+          <span className="font-semibold">{scooter.model || "N/A"}</span>
         </div>
-        
+
         <div className="flex justify-between">
           <span className="text-gray-600">Bateria:</span>
           <span className={`font-semibold ${getBatteryColor()}`}>
@@ -55,10 +55,16 @@ export default function ScooterPopup({ scooter, onClose, onReserved }) {
 
         <div className="flex justify-between">
           <span className="text-gray-600">Status:</span>
-          <span className={`font-semibold ${
-            reserved ? 'text-red-600' : 'text-green-600'
-          }`}>
-            {reserved ? '🔴 Zarezerwowana' : '🟢 Dostępna'}
+          <span
+            className={`font-semibold ${
+              reserved || scooter.status === "reserved"
+                ? "text-red-600"
+                : "text-green-600"
+            }`}
+          >
+            {reserved || scooter.status === "reserved"
+              ? "🔴 Zarezerwowana"
+              : "🟢 Dostępna"}
           </span>
         </div>
       </div>
@@ -71,11 +77,15 @@ export default function ScooterPopup({ scooter, onClose, onReserved }) {
 
       <button
         onClick={handleReserve}
-        disabled={loading || reserved}
-        className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg font-medium 
+        disabled={loading || reserved || scooter.status === "reserved"}
+        className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg font-medium
           hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {loading ? '⏳ Rezerwowanie...' : reserved ? '✅ Zarezerwowana' : '📍 Zarezerwuj na 5 min'}
+        {loading
+          ? "⏳ Rezerwowanie..."
+          : reserved
+            ? "✅ Zarezerwowana"
+            : "📍 Zarezerwuj na 5 min"}
       </button>
     </div>
   );
