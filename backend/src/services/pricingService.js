@@ -2,9 +2,9 @@ import redis from '../redis.js';
 
 const PRICING_KEY = 'pricing:config';
 const DEFAULT_PRICING = {
-  activationFee: 2.0, // Opłata aktywacyjna za rozpoczęcie jazdy (zł)
-  ridePerMinute: 0.50, // Cena za minutę jazdy (zł)
-  minimumRidePrice: 5.0, // Minimalna cena za jazdę (zł) - deprecated, można usunąć
+  activationFee: 2.0, // Opłata aktywacyjna za rozpoczęcie jazdy
+  ridePerMinute: 0.50, // Cena za minutę jazdy
+  minimumRidePrice: 5.0, // Minimalna cena za jazdę (obecnie nieużywane)
   updatedAt: new Date().toISOString(),
 };
 
@@ -50,7 +50,7 @@ export async function setPricing(pricing) {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function getActivationFee() {
   const pricing = await getPricing();
-  return pricing.activationFee || pricing.reservationPrice || 2.0; // Backward compatibility
+  return pricing.activationFee || pricing.reservationPrice || 2.0;
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

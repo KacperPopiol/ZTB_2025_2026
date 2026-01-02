@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   getAllScooters,
@@ -21,12 +21,18 @@ export default function AdminPanel() {
   const [scooters, setScooters] = useState([]);
   const [editingScooter, setEditingScooter] = useState(null);
   const [scooterForm, setScooterForm] = useState({
+    identifier: "",
     model: "",
     latitude: "",
     longitude: "",
     battery: 100,
     status: "available",
   });
+  
+  // Paginacja i wyszukiwanie
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Pricing
   const [pricing, setPricing] = useState({
@@ -39,6 +45,59 @@ export default function AdminPanel() {
     loadScooters();
     loadPricing();
   }, []);
+
+  // Resetuj stronę gdy zmienia się wyszukiwanie
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  // Callback dla LocationPicker
+  const handleLocationChange = useCallback((lat, lng) => {
+    setScooterForm(prev => ({
+      ...prev,
+      latitude: lat.toFixed(6),
+      longitude: lng.toFixed(6),
+    }));
+  }, []);
+
+  // Filtruj hulajnogi na podstawie wyszukiwania
+  const filteredScooters = scooters.filter((scooter) => {
+    if (!searchQuery.trim()) return true;
+    
+    const query = searchQuery.toLowerCase();
+    const identifier = (scooter.identifier || '').toLowerCase();
+    const model = (scooter.model || '').toLowerCase();
+    const status = (scooter.status || '').toLowerCase();
+    const battery = scooter.battery?.toString() || '';
+    const location = `${scooter.latitude?.toFixed(4) || ''}, ${scooter.longitude?.toFixed(4) || ''}`;
+    
+    return (
+      identifier.includes(query) ||
+      model.includes(query) ||
+      status.includes(query) ||
+      battery.includes(query) ||
+      location.includes(query)
+    );
+  });
+
+  // Oblicz paginację
+  const totalPages = Math.ceil(filteredScooters.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedScooters = filteredScooters.slice(startIndex, endIndex);
+
+  // Funkcje paginacji
+  const goToPage = (page) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
+
+  const goToPreviousPage = () => {
+    setCurrentPage(prev => Math.max(1, prev - 1));
+  };
+
+  const goToNextPage = () => {
+    setCurrentPage(prev => Math.min(totalPages, prev + 1));
+  };
 
   const loadScooters = async () => {
     try {
@@ -70,7 +129,7 @@ export default function AdminPanel() {
     setMessage({ type: "", text: "" });
 
     try {
-      // Wyślij activationFee zamiast reservationPrice
+      // Wyślij activationFee
       await updatePricing({
         activationFee: pricing.activationFee,
         ridePerMinute: pricing.ridePerMinute,
@@ -93,6 +152,7 @@ export default function AdminPanel() {
 
     try {
       await createScooter({
+        identifier: scooterForm.identifier || null,
         model: scooterForm.model,
         latitude: parseFloat(scooterForm.latitude),
         longitude: parseFloat(scooterForm.longitude),
@@ -100,6 +160,7 @@ export default function AdminPanel() {
       });
       setMessage({ type: "success", text: "Hulajnoga utworzona!" });
       setScooterForm({
+        identifier: "",
         model: "",
         latitude: "",
         longitude: "",
@@ -117,16 +178,27 @@ export default function AdminPanel() {
     }
   };
 
-  const handleEditScooter = (scooter) => {
-    setEditingScooter(scooter);
+  const handleEditScooter = useCallback((scooter) => {
+    const scooterToEdit = {
+      scooterId: scooter.scooterId,
+      identifier: scooter.identifier || "",
+      model: scooter.model || "",
+      latitude: scooter.latitude,
+      longitude: scooter.longitude,
+      battery: scooter.battery || 100,
+      status: scooter.status || "available",
+    };
+    
+    setEditingScooter(scooterToEdit);
     setScooterForm({
-      model: scooter.model,
-      latitude: scooter.latitude.toString(),
-      longitude: scooter.longitude.toString(),
-      battery: scooter.battery,
-      status: scooter.status,
+      identifier: scooterToEdit.identifier,
+      model: scooterToEdit.model,
+      latitude: scooterToEdit.latitude?.toString() || "",
+      longitude: scooterToEdit.longitude?.toString() || "",
+      battery: scooterToEdit.battery,
+      status: scooterToEdit.status,
     });
-  };
+  }, []);
 
   const handleUpdateScooter = async (e) => {
     e.preventDefault();
@@ -135,6 +207,7 @@ export default function AdminPanel() {
 
     try {
       await updateScooter(editingScooter.scooterId, {
+        identifier: scooterForm.identifier || undefined,
         model: scooterForm.model,
         latitude: parseFloat(scooterForm.latitude),
         longitude: parseFloat(scooterForm.longitude),
@@ -144,6 +217,7 @@ export default function AdminPanel() {
       setMessage({ type: "success", text: "Hulajnoga zaktualizowana!" });
       setEditingScooter(null);
       setScooterForm({
+        identifier: "",
         model: "",
         latitude: "",
         longitude: "",
@@ -186,6 +260,7 @@ export default function AdminPanel() {
   const cancelEdit = () => {
     setEditingScooter(null);
     setScooterForm({
+      identifier: "",
       model: "",
       latitude: "",
       longitude: "",
@@ -282,6 +357,23 @@ export default function AdminPanel() {
                   >
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Identyfikator (opcjonalnie - zostanie wygenerowany automatycznie)
+                      </label>
+                      <input
+                        type="text"
+                        value={scooterForm.identifier}
+                        onChange={(e) =>
+                          setScooterForm({ ...scooterForm, identifier: e.target.value.toUpperCase() })
+                        }
+                        placeholder="np. DT-001"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Jeśli nie podasz, identyfikator zostanie wygenerowany automatycznie na podstawie modelu
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
                         Model
                       </label>
                       <input
@@ -299,15 +391,10 @@ export default function AdminPanel() {
                         Lokalizacja (kliknij na mapie lub wpisz ręcznie)
                       </label>
                       <LocationPicker
+                        key={editingScooter ? editingScooter.scooterId : 'new'}
                         latitude={scooterForm.latitude}
                         longitude={scooterForm.longitude}
-                        onLocationChange={(lat, lng) => {
-                          setScooterForm({
-                            ...scooterForm,
-                            latitude: lat.toFixed(6),
-                            longitude: lng.toFixed(6),
-                          });
-                        }}
+                        onLocationChange={handleLocationChange}
                         height="250px"
                       />
                     </div>
@@ -406,13 +493,66 @@ export default function AdminPanel() {
                 </div>
 
                 <div className="border-t pt-6">
-                  <h2 className="text-2xl font-bold mb-4">
-                    Lista hulajnóg ({scooters.length})
-                  </h2>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-2xl font-bold">
+                      Lista hulajnóg ({filteredScooters.length} / {scooters.length})
+                    </h2>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm text-gray-600">Pokaż:</label>
+                        <select
+                          value={itemsPerPage}
+                          onChange={(e) => {
+                            setItemsPerPage(parseInt(e.target.value));
+                            setCurrentPage(1);
+                          }}
+                          className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                          <option value={5}>5</option>
+                          <option value={10}>10</option>
+                          <option value={20}>20</option>
+                          <option value={50}>50</option>
+                          <option value={100}>100</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Pasek wyszukiwania */}
+                  <div className="mb-4">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Szukaj po identyfikatorze, modelu, statusie, baterii, lokalizacji..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </div>
+                      {searchQuery && (
+                        <button
+                          onClick={() => setSearchQuery("")}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                        >
+                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Identyfikator
+                          </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Model
                           </th>
@@ -431,57 +571,123 @@ export default function AdminPanel() {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {scooters.map((scooter) => (
-                          <tr key={scooter.scooterId}>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                              {scooter.model}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {scooter.latitude?.toFixed(4)}, {scooter.longitude?.toFixed(4)}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {scooter.battery}%
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              <span
-                                className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                                  scooter.status === "available"
-                                    ? "bg-green-100 text-green-800"
-                                    : scooter.status === "reserved"
-                                      ? "bg-yellow-100 text-yellow-800"
-                                      : scooter.status === "in_use"
-                                        ? "bg-blue-100 text-blue-800"
-                                        : "bg-gray-100 text-gray-800"
-                                }`}
-                              >
-                                {scooter.status === "available"
-                                  ? "Dostępna"
-                                  : scooter.status === "reserved"
-                                    ? "Zarezerwowana"
-                                    : scooter.status === "in_use"
-                                      ? "W użyciu"
-                                      : "W naprawie"}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                              <button
-                                onClick={() => handleEditScooter(scooter)}
-                                className="text-blue-600 hover:text-blue-900 mr-4"
-                              >
-                                Edytuj
-                              </button>
-                              <button
-                                onClick={() => handleDeleteScooter(scooter.scooterId)}
-                                className="text-red-600 hover:text-red-900"
-                              >
-                                Usuń
-                              </button>
+                        {paginatedScooters.length === 0 ? (
+                          <tr>
+                            <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
+                              {searchQuery ? "Nie znaleziono hulajnóg pasujących do wyszukiwania" : "Brak hulajnóg"}
                             </td>
                           </tr>
-                        ))}
+                        ) : (
+                          paginatedScooters.map((scooter) => (
+                            <tr key={scooter.scooterId}>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600">
+                                {scooter.identifier || 'Brak'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {scooter.model}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {scooter.latitude?.toFixed(4)}, {scooter.longitude?.toFixed(4)}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {scooter.battery}%
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                <span
+                                  className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                    scooter.status === "available"
+                                      ? "bg-green-100 text-green-800"
+                                      : scooter.status === "reserved"
+                                        ? "bg-yellow-100 text-yellow-800"
+                                        : scooter.status === "in_use"
+                                          ? "bg-blue-100 text-blue-800"
+                                          : "bg-gray-100 text-gray-800"
+                                  }`}
+                                >
+                                  {scooter.status === "available"
+                                    ? "Dostępna"
+                                    : scooter.status === "reserved"
+                                      ? "Zarezerwowana"
+                                      : scooter.status === "in_use"
+                                        ? "W użyciu"
+                                        : "W naprawie"}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button
+                                  onClick={() => handleEditScooter(scooter)}
+                                  className="text-blue-600 hover:text-blue-900 mr-4"
+                                >
+                                  Edytuj
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteScooter(scooter.scooterId)}
+                                  className="text-red-600 hover:text-red-900"
+                                >
+                                  Usuń
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Paginacja */}
+                  {totalPages > 1 && (
+                    <div className="mt-4 flex items-center justify-between">
+                      <div className="text-sm text-gray-700">
+                        Pokazuję <span className="font-medium">{startIndex + 1}</span> - <span className="font-medium">{Math.min(endIndex, filteredScooters.length)}</span> z <span className="font-medium">{filteredScooters.length}</span> hulajnóg
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={goToPreviousPage}
+                          disabled={currentPage === 1}
+                          className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                        >
+                          Poprzednia
+                        </button>
+                        
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                            let pageNum;
+                            if (totalPages <= 5) {
+                              pageNum = i + 1;
+                            } else if (currentPage <= 3) {
+                              pageNum = i + 1;
+                            } else if (currentPage >= totalPages - 2) {
+                              pageNum = totalPages - 4 + i;
+                            } else {
+                              pageNum = currentPage - 2 + i;
+                            }
+                            
+                            return (
+                              <button
+                                key={pageNum}
+                                onClick={() => goToPage(pageNum)}
+                                className={`px-3 py-2 text-sm font-medium rounded-lg transition ${
+                                  currentPage === pageNum
+                                    ? "bg-blue-600 text-white"
+                                    : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
+                                }`}
+                              >
+                                {pageNum}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        
+                        <button
+                          onClick={goToNextPage}
+                          disabled={currentPage === totalPages}
+                          className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                        >
+                          Następna
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

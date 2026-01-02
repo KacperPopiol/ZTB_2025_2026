@@ -13,10 +13,15 @@ L.Icon.Default.mergeOptions({
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
 });
 
-function LocationMarker({ position, setPosition }) {
+function LocationMarker({ position, setPosition, onLocationChange }) {
   useMapEvents({
     click(e) {
-      setPosition([e.latlng.lat, e.latlng.lng]);
+      const newPosition = [e.latlng.lat, e.latlng.lng];
+      setPosition(newPosition);
+      // Wywołaj callback tylko gdy użytkownik kliknie, nie w useEffect
+      if (onLocationChange) {
+        onLocationChange(newPosition[0], newPosition[1]);
+      }
     },
   });
 
@@ -31,19 +36,19 @@ export default function LocationPicker({ latitude, longitude, onLocationChange, 
   useEffect(() => {
     if (latitude && longitude) {
       const newPosition = [parseFloat(latitude), parseFloat(longitude)];
-      setPosition(newPosition);
+      // Aktualizuj pozycję tylko jeśli się zmieniła (aby uniknąć niepotrzebnych aktualizacji)
+      setPosition(prev => {
+        if (!prev || prev[0] !== newPosition[0] || prev[1] !== newPosition[1]) {
+          return newPosition;
+        }
+        return prev;
+      });
     } else {
       setPosition(null);
     }
   }, [latitude, longitude]);
 
-  useEffect(() => {
-    if (position && onLocationChange) {
-      onLocationChange(position[0], position[1]);
-    }
-  }, [position, onLocationChange]);
-
-  const defaultCenter = position || [50.0647, 19.945]; // Kraków jako domyślne
+  const defaultCenter = position || [49.6215, 20.6969]; // Nowy Sącz jako domyślne
 
   return (
     <div className="border border-gray-300 rounded-lg overflow-hidden" style={{ height }}>
@@ -57,7 +62,7 @@ export default function LocationPicker({ latitude, longitude, onLocationChange, 
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <LocationMarker position={position} setPosition={setPosition} />
+        <LocationMarker position={position} setPosition={setPosition} onLocationChange={onLocationChange} />
       </MapContainer>
       <div className="bg-blue-50 border-t border-blue-200 p-2 text-sm text-blue-700">
         📍 Kliknij na mapę, aby ustawić lokalizację

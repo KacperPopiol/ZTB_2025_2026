@@ -4,15 +4,101 @@ import docClient, { TABLES } from '../dynamodb.js';
 import redis from '../redis.js';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Generuj skrót modelu dla identyfikatora
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function generateModelPrefix(model) {
+  if (!model) return 'SC';
+  
+  // Usuń spacje i znaki specjalne, weź pierwsze litery słów
+  const words = model.toUpperCase().split(/\s+/);
+  if (words.length === 1) {
+    // Jeśli jedno słowo, weź pierwsze 3-4 litery
+    return words[0].substring(0, 4).replace(/[^A-Z0-9]/g, '');
+  } else {
+    // Jeśli wiele słów, weź pierwsze litery każdego słowa
+    return words.map(w => w[0]).join('').substring(0, 4).replace(/[^A-Z0-9]/g, '');
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Sprawdź czy identyfikator jest unikalny
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function isIdentifierUnique(identifier, excludeScooterId = null) {
+  try {
+    const command = new ScanCommand({
+      TableName: TABLES.SCOOTERS,
+      FilterExpression: '#identifier = :identifier',
+      ExpressionAttributeNames: {
+        '#identifier': 'identifier',
+      },
+      ExpressionAttributeValues: {
+        ':identifier': identifier,
+      },
+    });
+
+    const response = await docClient.send(command);
+    const scooters = response.Items || [];
+    
+    // Jeśli edytujemy, wyklucz aktualną hulajnogę
+    if (excludeScooterId) {
+      return !scooters.some(s => s.scooterId !== excludeScooterId);
+    }
+    
+    return scooters.length === 0;
+  } catch (error) {
+    console.error('Błąd sprawdzania unikalności identyfikatora:', error);
+    return false;
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Generuj unikalny identyfikator
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function generateUniqueIdentifier(model, excludeScooterId = null) {
+  const prefix = generateModelPrefix(model);
+  let counter = 1;
+  let identifier = `${prefix}-${String(counter).padStart(3, '0')}`;
+  
+  // Szukaj wolnego identyfikatora
+  while (!(await isIdentifierUnique(identifier, excludeScooterId))) {
+    counter++;
+    identifier = `${prefix}-${String(counter).padStart(3, '0')}`;
+    
+    // Zabezpieczenie przed nieskończoną pętlą
+    if (counter > 9999) {
+      // Jeśli przekroczymy limit, użyj UUID jako fallback
+      identifier = `${prefix}-${uuidv4().substring(0, 8).toUpperCase()}`;
+      break;
+    }
+  }
+  
+  return identifier;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Utwórz nową hulajnogę
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-export async function createScooter({ model, latitude, longitude, battery = 100 }) {
+export async function createScooter({ model, latitude, longitude, battery = 100, identifier = null }) {
   try {
     const scooterId = uuidv4();
     const now = new Date().toISOString();
 
+    // Generuj identyfikator jeśli nie podano
+    let finalIdentifier = identifier;
+    if (!finalIdentifier || finalIdentifier.trim() === '') {
+      finalIdentifier = await generateUniqueIdentifier(model);
+    } else {
+      // Sprawdź unikalność podanego identyfikatora
+      finalIdentifier = finalIdentifier.trim().toUpperCase();
+      const isUnique = await isIdentifierUnique(finalIdentifier);
+      if (!isUnique) {
+        throw new Error(`Identyfikator "${finalIdentifier}" już istnieje. Musi być unikalny.`);
+      }
+    }
+
     const scooter = {
       scooterId,
+      identifier: finalIdentifier,
       model,
       latitude,
       longitude,
@@ -36,6 +122,15 @@ export async function createScooter({ model, latitude, longitude, battery = 100 
 
     // Zapisz w cache
     await redis.setex(`scooter:${scooterId}`, 300, JSON.stringify(scooter));
+
+    // Usuń cache listy wszystkich hulajnóg, aby odświeżyć listę
+    // Usuń wszystkie cache'e związane z listą hulajnóg
+    const cacheKeys = await redis.keys('scooters:all:*');
+    if (cacheKeys.length > 0) {
+      await redis.del(...cacheKeys);
+    }
+    await redis.del('scooters:stats');
+    await redis.del('scooters:models');
 
     return scooter;
   } catch (error) {
@@ -180,7 +275,8 @@ export async function getScootersNearby(
     const filtered = scooters.filter((s) => {
       if (!s) return false;
       if (s.battery < minBattery) return false;
-      if (status && s.status !== status) return false;
+      // Jeśli status jest null, pokaż wszystkie (nie filtruj po statusie)
+      if (status !== null && status !== undefined && s.status !== status) return false;
       if (model && s.model !== model) return false;
       return true;
     });
@@ -197,10 +293,20 @@ export async function getScootersNearby(
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function updateScooter(scooterId, updates) {
   try {
-    const allowedUpdates = ['model', 'latitude', 'longitude', 'battery', 'status'];
+    const allowedUpdates = ['identifier', 'model', 'latitude', 'longitude', 'battery', 'status'];
     const updateExpressions = [];
     const expressionAttributeNames = {};
     const expressionAttributeValues = {};
+
+    // Sprawdź unikalność identyfikatora jeśli jest aktualizowany
+    if (updates.identifier !== undefined) {
+      const newIdentifier = updates.identifier.trim().toUpperCase();
+      const isUnique = await isIdentifierUnique(newIdentifier, scooterId);
+      if (!isUnique) {
+        throw new Error(`Identyfikator "${newIdentifier}" już istnieje. Musi być unikalny.`);
+      }
+      updates.identifier = newIdentifier;
+    }
 
     Object.keys(updates).forEach((key) => {
       if (allowedUpdates.includes(key)) {
@@ -242,7 +348,13 @@ export async function updateScooter(scooterId, updates) {
 
     // Usuń cache
     await redis.del(`scooter:${scooterId}`);
-    await redis.del(`scooters:all:100`);
+    // Usuń wszystkie cache'e związane z listą hulajnóg
+    const cacheKeys = await redis.keys('scooters:all:*');
+    if (cacheKeys.length > 0) {
+      await redis.del(...cacheKeys);
+    }
+    await redis.del('scooters:stats');
+    await redis.del('scooters:models');
 
     return response.Attributes;
   } catch (error) {
@@ -266,7 +378,13 @@ export async function deleteScooter(scooterId) {
     // Usuń z Redis GEO i cache
     await redis.zrem('scooters:locations', scooterId);
     await redis.del(`scooter:${scooterId}`);
-    await redis.del(`scooters:all:100`);
+    // Usuń wszystkie cache'e związane z listą hulajnóg
+    const cacheKeys = await redis.keys('scooters:all:*');
+    if (cacheKeys.length > 0) {
+      await redis.del(...cacheKeys);
+    }
+    await redis.del('scooters:stats');
+    await redis.del('scooters:models');
 
     return { success: true };
   } catch (error) {

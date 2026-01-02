@@ -49,26 +49,24 @@ export default function FilterBar({
           </div>
         </div>
 
-        <div className="min-w-[150px]">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Status
-          </label>
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="available">Dostępne</option>
-            {isAdmin() && (
-              <>
-                <option value="reserved">Zarezerwowane</option>
-                <option value="in_use">W użyciu</option>
-                <option value="maintenance">W naprawie</option>
-                <option value="">Wszystkie</option>
-              </>
-            )}
-          </select>
-        </div>
+        {isAdmin() && (
+          <div className="min-w-[150px]">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Status
+            </label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="available">Dostępne</option>
+              <option value="reserved">Zarezerwowane</option>
+              <option value="in_use">W użyciu</option>
+              <option value="maintenance">W naprawie</option>
+              <option value="">Wszystkie</option>
+            </select>
+          </div>
+        )}
 
         <div className="min-w-[150px]">
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -88,21 +86,23 @@ export default function FilterBar({
           </select>
         </div>
 
-        <div className="min-w-[150px]">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Sortuj po
-          </label>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="">Domyślnie</option>
-            <option value="battery">Bateria (↓)</option>
-            <option value="battery-asc">Bateria (↑)</option>
-            <option value="model">Model (A-Z)</option>
-          </select>
-        </div>
+        {isAdmin() && (
+          <div className="min-w-[150px]">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Sortuj po
+            </label>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">Domyślnie</option>
+              <option value="battery">Bateria (↓)</option>
+              <option value="battery-asc">Bateria (↑)</option>
+              <option value="model">Model (A-Z)</option>
+            </select>
+          </div>
+        )}
       </div>
     </div>
   );

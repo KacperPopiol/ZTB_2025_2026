@@ -326,7 +326,7 @@ export async function deductFromWallet(userId, amount) {
     });
 
     const response = await docClient.send(command);
-    await redis.del(`user:${userId}`); // Czyścimy cache
+    await redis.del(`user:${userId}`);
 
     const { password, ...userWithoutPassword } = response.Attributes;
     return userWithoutPassword;

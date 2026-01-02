@@ -130,7 +130,7 @@ router.post('/login', async (req, res) => {
 });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// POST /api/auth/verify - Weryfikacja tokenu (opcjonalne)
+// POST /api/auth/verify - Weryfikacja tokenu
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 router.post('/verify', async (req, res) => {
   try {

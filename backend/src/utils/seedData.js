@@ -5,8 +5,8 @@ import docClient, { TABLES } from "../dynamodb.js";
 import redis from "../redis.js";
 import { PutCommand } from "@aws-sdk/lib-dynamodb";
 
-// Współrzędne: Kraków (centrum)
-const CITY_CENTER = { lat: 50.0647, lon: 19.945 };
+// Współrzędne: Nowy Sącz (centrum)
+const CITY_CENTER = { lat: 49.6215, lon: 20.6969 };
 const CITY_RADIUS_KM = 2;
 
 function generateRandomCoordinates() {
@@ -102,6 +102,23 @@ async function seedUsers() {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Generuj skrót modelu dla identyfikatora
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function generateModelPrefix(model) {
+  if (!model) return 'SC';
+  
+  // Usuń spacje i znaki specjalne, weź pierwsze litery słów
+  const words = model.toUpperCase().split(/\s+/);
+  if (words.length === 1) {
+    // Jeśli jedno słowo, weź pierwsze 3-4 litery
+    return words[0].substring(0, 4).replace(/[^A-Z0-9]/g, '');
+  } else {
+    // Jeśli wiele słów, weź pierwsze litery każdego słowa
+    return words.map(w => w[0]).join('').substring(0, 4).replace(/[^A-Z0-9]/g, '');
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Seedowanie hulajnóg
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 async function seedScootersData() {
@@ -124,6 +141,9 @@ async function seedScootersData() {
     "maintenance",
   ];
   const scooters = [];
+  
+  // Śledź liczniki dla każdego modelu
+  const modelCounters = {};
 
   for (let i = 1; i <= 50; i++) {
     const scooterId = uuidv4();
@@ -132,9 +152,18 @@ async function seedScootersData() {
     const model = models[Math.floor(Math.random() * models.length)];
     const status = statuses[Math.floor(Math.random() * statuses.length)];
     const now = new Date().toISOString();
+    
+    // Generuj unikalny identyfikator
+    const prefix = generateModelPrefix(model);
+    if (!modelCounters[model]) {
+      modelCounters[model] = 0;
+    }
+    modelCounters[model]++;
+    const identifier = `${prefix}-${String(modelCounters[model]).padStart(3, '0')}`;
 
     const scooter = {
       scooterId,
+      identifier,
       model,
       latitude: lat,
       longitude: lon,

@@ -12,7 +12,7 @@ const redis = new Redis({
   },
 });
 
-redis.on('connect', () => console.log('✅ Połączenie z Redis udane'));
-redis.on('error', (err) => console.error('❌ Błąd Redis:', err));
+redis.on('connect', () => console.log('Połączenie z Redis udane'));
+redis.on('error', (err) => console.error('Błąd Redis:', err));
 
 export default redis;

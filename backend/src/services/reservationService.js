@@ -38,7 +38,7 @@ export async function createReservation(userId, scooterId) {
       throw new Error('Hulajnoga jest już zarezerwowana');
     }
 
-    // Rezerwacja jest darmowa - tylko blokuje hulajnogę na 5 minut
+    // Rezerwacja blokuje hulajnogę na 5 minut
     const reservationId = uuidv4();
     const now = new Date().toISOString();
     const expiresAt = new Date(Date.now() + RESERVATION_TTL * 1000).toISOString();
@@ -48,7 +48,7 @@ export async function createReservation(userId, scooterId) {
       userId,
       scooterId,
       status: 'active', // active, completed, cancelled, expired
-      price: 0, // Rezerwacja darmowa
+      price: 0,
       createdAt: now,
       expiresAt,
     };
@@ -71,7 +71,7 @@ export async function createReservation(userId, scooterId) {
     return {
       ...reservation,
       expiresIn: RESERVATION_TTL,
-      price: 0, // Rezerwacja darmowa
+      price: 0,
     };
   } catch (error) {
     console.error('Błąd tworzenia rezerwacji:', error);
@@ -155,7 +155,7 @@ export async function getUserReservations(userId, limit = 20) {
         ':userId': userId,
       },
       Limit: limit,
-      ScanIndexForward: false, // Sortuj od najnowszych
+      ScanIndexForward: false,
     });
 
     const response = await docClient.send(command);

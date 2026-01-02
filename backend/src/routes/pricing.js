@@ -27,7 +27,7 @@ router.put('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { activationFee, reservationPrice, ridePerMinute, minimumRidePrice } = req.body;
 
-    // Backward compatibility - jeśli podano reservationPrice, użyj jako activationFee
+    // Jeśli podano reservationPrice, użyj jako activationFee
     const fee = activationFee !== undefined ? activationFee : reservationPrice;
 
     // Walidacja

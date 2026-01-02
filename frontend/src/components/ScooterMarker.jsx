@@ -61,12 +61,27 @@ export default function ScooterMarker({ scooter, onReserved }) {
     return "text-red-600";
   };
 
+  const getStatusInfo = () => {
+    const status = scooter.status;
+    if (status === "reserved") {
+      return { color: "reserved", text: "🔴 Zarezerwowana", textColor: "text-red-600", canReserve: false };
+    }
+    if (status === "maintenance") {
+      return { color: "maintenance", text: "🔧 W naprawie", textColor: "text-gray-600", canReserve: false };
+    }
+    if (status === "in_use") {
+      return { color: "in-use", text: "🔵 W użyciu", textColor: "text-blue-600", canReserve: false };
+    }
+    return { color: "available", text: "🟢 Dostępna", textColor: "text-green-600", canReserve: true };
+  };
+
+  const statusInfo = getStatusInfo();
   const isReserved = scooter.status === "reserved";
 
   return (
     <Marker
       position={[parseFloat(scooter.latitude), parseFloat(scooter.longitude)]}
-      icon={createMarkerIcon(isReserved ? "reserved" : "available")}
+      icon={createMarkerIcon(statusInfo.color)}
     >
       <Popup maxWidth={300} className="custom-popup">
         <div className="p-2">
@@ -82,12 +97,8 @@ export default function ScooterMarker({ scooter, onReserved }) {
 
             <div className="flex justify-between">
               <span className="text-gray-600">Status:</span>
-              <span
-                className={`font-semibold ${
-                  isReserved ? "text-red-600" : "text-green-600"
-                }`}
-              >
-                {isReserved ? "🔴 Zarezerwowana" : "🟢 Dostępna"}
+              <span className={`font-semibold ${statusInfo.textColor}`}>
+                {statusInfo.text}
               </span>
             </div>
 
@@ -115,7 +126,7 @@ export default function ScooterMarker({ scooter, onReserved }) {
             </div>
           )}
 
-          {!showConfirm && !isReserved && (
+          {!showConfirm && statusInfo.canReserve && (
             <button
               onClick={() => setShowConfirm(true)}
               disabled={loading}
@@ -126,7 +137,7 @@ export default function ScooterMarker({ scooter, onReserved }) {
             </button>
           )}
 
-          {showConfirm && !isReserved && (
+          {showConfirm && statusInfo.canReserve && (
             <div className="space-y-2">
               <p className="text-sm text-gray-700 mb-2">
                 Czy na pewno chcesz zarezerwować tę hulajnogę?
@@ -160,9 +171,11 @@ export default function ScooterMarker({ scooter, onReserved }) {
             </div>
           )}
 
-          {isReserved && (
+          {!statusInfo.canReserve && (
             <div className="text-center py-2 text-sm text-gray-600">
-              Ta hulajnoga jest już zarezerwowana
+              {scooter.status === "reserved" && "Ta hulajnoga jest już zarezerwowana"}
+              {scooter.status === "maintenance" && "🔧 Ta hulajnoga jest w naprawie i nie jest dostępna"}
+              {scooter.status === "in_use" && "🔵 Ta hulajnoga jest obecnie w użyciu"}
             </div>
           )}
         </div>

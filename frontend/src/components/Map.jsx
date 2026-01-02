@@ -29,9 +29,9 @@ export default function Map({ minBattery, status, model, sortBy }) {
   const [scooters, setScooters] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Domyślne współrzędne (Kraków)
-  const DEFAULT_LAT = 50.0647;
-  const DEFAULT_LON = 19.945;
+  // Domyślne współrzędne (Nowy Sącz)
+  const DEFAULT_LAT = 49.6215;
+  const DEFAULT_LON = 20.6969;
 
   const handleMapMove = async (lat, lon, battery, statusFilter, modelFilter, sortByFilter) => {
     setLoading(true);

@@ -187,7 +187,7 @@ export async function getRidePerMinutePrice() {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function chargeForActiveRides() {
   try {
-    // Pobierz wszystkie aktywne jazdy (używamy ScanCommand, ponieważ nie mamy indexu StatusIndex)
+    // Pobierz wszystkie aktywne jazdy
     const command = new ScanCommand({
       TableName: TABLES.RIDES,
       FilterExpression: '#status = :status',
@@ -294,7 +294,7 @@ export async function getUserRides(userId, limit = 20) {
         ':userId': userId,
       },
       Limit: limit,
-      ScanIndexForward: false, // Sortuj od najnowszych
+      ScanIndexForward: false,
     });
 
     const response = await docClient.send(command);

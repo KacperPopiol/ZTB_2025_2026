@@ -32,7 +32,7 @@ function AdminRoute({ children }) {
   return children;
 }
 
-// Public Route Component (redirect to home if already logged in)
+// Public Route Component
 function PublicRoute({ children }) {
   if (isAuthenticated()) {
     return <Navigate to="/" replace />;

@@ -46,6 +46,18 @@ export default function Home() {
     loadStats();
   }, []);
 
+  // Dla nie-adminów wymuś status="available" i sortBy=""
+  useEffect(() => {
+    if (!isAdmin()) {
+      if (status !== "available") {
+        setStatus("available");
+      }
+      if (sortBy !== "") {
+        setSortBy("");
+      }
+    }
+  }, [status, sortBy]);
+
   const handleLogout = () => {
     logout();
     navigate("/login");
@@ -172,12 +184,6 @@ export default function Home() {
         // Odśwież profil użytkownika po zakończeniu jazdy
         getMyProfile().then(response => setUser(response.user)).catch(console.error);
       }} />
-
-      {/* Footer */}
-      <footer className="bg-white border-t text-center py-3 text-sm text-gray-600">
-        🎯 Przesuń mapę aby zobaczyć hulajnogi w pobliżu | 📍 Kliknij na
-        hulajnogę aby zarezerwować
-      </footer>
     </div>
   );
 }

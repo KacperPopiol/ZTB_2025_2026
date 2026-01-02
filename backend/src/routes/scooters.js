@@ -32,7 +32,8 @@ router.get('/', optionalAuth, async (req, res) => {
       const longitude = parseFloat(lon);
       const radiusMeters = parseInt(radius) || 500;
       const minBatt = parseInt(minBattery) || 0;
-      const statusFilter = status || 'available';
+      // Jeśli status jest pustym stringiem, oznacza "wszystkie" - przekaż null
+      const statusFilter = status === '' ? null : (status || 'available');
       const modelFilter = model || null;
 
       if (isNaN(latitude) || isNaN(longitude)) {
@@ -149,7 +150,7 @@ router.get('/:scooterId', async (req, res) => {
 // POST /api/scooters - Utwórz nową hulajnogę (tylko admin)
 router.post('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { model, latitude, longitude, battery } = req.body;
+    const { model, latitude, longitude, battery, identifier } = req.body;
 
     // Walidacja
     if (!model || latitude === undefined || longitude === undefined) {
@@ -170,11 +171,17 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Poziom baterii musi być między 0 a 100' });
     }
 
+    // Walidacja identyfikatora (opcjonalny, ale jeśli podany, musi być unikalny)
+    if (identifier && typeof identifier !== 'string') {
+      return res.status(400).json({ error: 'Identyfikator musi być tekstem' });
+    }
+
     const scooter = await createScooter({
       model,
       latitude: lat,
       longitude: lon,
       battery: batt,
+      identifier: identifier || null,
     });
 
     res.status(201).json({
@@ -219,9 +226,15 @@ router.get('/status/:status', authenticateToken, requireAdmin, async (req, res) 
 router.put('/:scooterId', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { scooterId } = req.params;
-    const { model, latitude, longitude, battery, status } = req.body;
+    const { model, latitude, longitude, battery, status, identifier } = req.body;
 
     const updates = {};
+    if (identifier !== undefined) {
+      if (typeof identifier !== 'string' || identifier.trim() === '') {
+        return res.status(400).json({ error: 'Identyfikator musi być niepustym tekstem' });
+      }
+      updates.identifier = identifier;
+    }
     if (model !== undefined) updates.model = model;
     if (latitude !== undefined) updates.latitude = parseFloat(latitude);
     if (longitude !== undefined) updates.longitude = parseFloat(longitude);

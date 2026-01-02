@@ -58,6 +58,15 @@ body {
   background-color: #ef4444;
 }
 
+.scooter-marker.maintenance {
+  background-color: #6b7280;
+  opacity: 0.8;
+}
+
+.scooter-marker.in-use {
+  background-color: #3b82f6;
+}
+
 .scooter-marker.low-battery {
   background-color: #f97316;
 }

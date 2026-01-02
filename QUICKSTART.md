@@ -64,11 +64,17 @@ copy .env.example .env
 
 # Edytuj .env i ustaw zmienne
 
-# Zainicjalizuj tabele DynamoDB
-npm run db:init
+# Automatycznie zainicjalizuj tabele i wygeneruj dane testowe (zalecane)
+npm run db:setup
 
-# Wygeneruj przykładowe dane
-npm run db:seed
+# LUB ręcznie (jeśli potrzebujesz większej kontroli):
+# npm run db:init      # Tylko inicjalizacja tabel
+# npm run db:seed      # Tylko seedowanie danych
+
+# Opcje automatycznego setupu:
+# npm run db:setup:reset   # Resetuje istniejące tabele i seeduje dane
+# npm run db:setup:force   # To samo co reset
+# npm run db:setup:no-seed # Tylko inicjalizacja, bez seedowania
 
 # Uruchom serwer deweloperski
 npm run dev
@@ -82,8 +88,7 @@ Backend będzie dostępny pod: **http://localhost:5000**
 
 **WAŻNE:** Przed uruchomieniem frontendu musisz:
 1. Uruchomić backend (krok 3)
-2. Zainicjalizować tabele (`npm run db:init`)
-3. Załadować dane testowe (`npm run db:seed`)
+2. Zainicjalizować tabele i załadować dane testowe (`npm run db:setup`)
 
 ```bash
 cd frontend

@@ -7,14 +7,14 @@ dotenv.config();
 // Konfiguracja klienta DynamoDB
 const client = new DynamoDBClient({
   region: process.env.AWS_REGION || 'eu-central-1',
-  endpoint: process.env.DYNAMODB_ENDPOINT || undefined, // dla lokalnego DynamoDB (opcjonalnie)
+  endpoint: process.env.DYNAMODB_ENDPOINT || undefined, // dla lokalnego DynamoDB
   credentials: process.env.DYNAMODB_ENDPOINT ? {
     accessKeyId: 'dummy',
     secretAccessKey: 'dummy'
   } : undefined
 });
 
-// Klient z Document API (łatwiejszy w użyciu)
+// Klient z Document API
 const docClient = DynamoDBDocumentClient.from(client, {
   marshallOptions: {
     removeUndefinedValues: true,
@@ -39,10 +39,10 @@ export async function checkDynamoDBConnection() {
     const { ListTablesCommand } = await import('@aws-sdk/client-dynamodb');
     const command = new ListTablesCommand({});
     await client.send(command);
-    console.log('✅ Połączenie z DynamoDB udane');
+    console.log('Połączenie z DynamoDB udane');
     return true;
   } catch (error) {
-    console.error('❌ Błąd połączenia z DynamoDB:', error.message);
+    console.error('Błąd połączenia z DynamoDB:', error.message);
     return false;
   }
 }

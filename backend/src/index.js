@@ -43,21 +43,21 @@ async function checkConnections() {
 app.listen(PORT, async () => {
   console.log(`
   ╔════════════════════════════════════════╗
-  ║   🛴 EcoScoot Backend Started! 🛴      ║
-  ║   🌐 http://localhost:${PORT}             ║
+  ║        EcoScoot Backend Started!       ║
+  ║        http://localhost:${PORT}        ║
   ╚════════════════════════════════════════╝
   `);
 
   await checkConnections();
 
   console.log(`
-  📝 Aby zainicjalizować tabele DynamoDB:
+     Aby zainicjalizować tabele DynamoDB:
      POST http://localhost:${PORT}/api/init
 
-  📝 Aby wygenerować przykładowe dane:
+     Aby wygenerować przykładowe dane:
      POST http://localhost:${PORT}/api/seed
 
-  📝 Dostępne endpointy:
+     Dostępne endpointy:
      - POST /api/auth/register     - Rejestracja
      - POST /api/auth/login        - Logowanie
      - GET  /api/scooters          - Lista hulajnóg
@@ -83,14 +83,14 @@ function startRideChargingInterval() {
     try {
       const result = await chargeForActiveRides();
       if (result.charged > 0 || result.ended > 0) {
-        console.log(`💰 Pobrano opłaty: ${result.charged} jazd, zakończono: ${result.ended} jazd (brak środków)`);
+        console.log(`Pobrano opłaty: ${result.charged} jazd, zakończono: ${result.ended} jazd (brak środków)`);
       }
     } catch (error) {
       console.error('Błąd pobierania opłat za aktywne jazdy:', error);
     }
   }, 60000); // 60 sekund = 1 minuta
 
-  console.log('✅ Interwał pobierania opłat za jazdy uruchomiony (co 1 minutę)');
+  console.log('Interwał pobierania opłat za jazdy uruchomiony (co 1 minutę)');
 }
 
 // Graceful shutdown
@@ -101,7 +101,7 @@ process.on("SIGTERM", () => {
 });
 
 process.on("SIGINT", () => {
-  console.log("\n👋 Zamykanie serwera...");
+  console.log("\nZamykanie serwera...");
   redis.quit();
   process.exit(0);
 });

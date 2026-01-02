@@ -159,10 +159,6 @@ function Login() {
             </p>
           </div>
         </div>
-
-        <div className="mt-6 text-center text-white text-sm">
-          <p>© 2025 EcoScoot - Projekt ZTB</p>
-        </div>
       </div>
     </div>
   );

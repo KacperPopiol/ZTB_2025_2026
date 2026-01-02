@@ -9,7 +9,11 @@
     "dev": "nodemon src/index.js",
     "db:init": "node src/utils/initDynamoDB.js",
     "db:init:reset": "node src/utils/initDynamoDB.js --reset",
-    "db:seed": "node -e \"import('./src/utils/seedData.js').then(m => m.seedScooters())\""
+    "db:seed": "node -e \"import('./src/utils/seedData.js').then(m => m.seedScooters())\"",
+    "db:setup": "node src/utils/setupDatabase.js",
+    "db:setup:reset": "node src/utils/setupDatabase.js --reset",
+    "db:setup:force": "node src/utils/setupDatabase.js --force",
+    "db:setup:no-seed": "node src/utils/setupDatabase.js --no-seed"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.490.0",
