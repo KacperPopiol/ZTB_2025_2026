@@ -1,7 +1,7 @@
 import { PutCommand, GetCommand, UpdateCommand, DeleteCommand, ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
 import docClient, { TABLES } from '../dynamodb.js';
-import redis from '../redis.js';
+import redis from '../redisWrapper.js'; // ← Zmiana importu
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Generuj skrót modelu dla identyfikatora
@@ -9,13 +9,10 @@ import redis from '../redis.js';
 function generateModelPrefix(model) {
   if (!model) return 'SC';
   
-  // Usuń spacje i znaki specjalne, weź pierwsze litery słów
   const words = model.toUpperCase().split(/\s+/);
   if (words.length === 1) {
-    // Jeśli jedno słowo, weź pierwsze 3-4 litery
     return words[0].substring(0, 4).replace(/[^A-Z0-9]/g, '');
   } else {
-    // Jeśli wiele słów, weź pierwsze litery każdego słowa
     return words.map(w => w[0]).join('').substring(0, 4).replace(/[^A-Z0-9]/g, '');
   }
 }
@@ -39,7 +36,6 @@ async function isIdentifierUnique(identifier, excludeScooterId = null) {
     const response = await docClient.send(command);
     const scooters = response.Items || [];
     
-    // Jeśli edytujemy, wyklucz aktualną hulajnogę
     if (excludeScooterId) {
       return !scooters.some(s => s.scooterId !== excludeScooterId);
     }
@@ -59,20 +55,37 @@ async function generateUniqueIdentifier(model, excludeScooterId = null) {
   let counter = 1;
   let identifier = `${prefix}-${String(counter).padStart(3, '0')}`;
   
-  // Szukaj wolnego identyfikatora
   while (!(await isIdentifierUnique(identifier, excludeScooterId))) {
     counter++;
     identifier = `${prefix}-${String(counter).padStart(3, '0')}`;
     
-    // Zabezpieczenie przed nieskończoną pętlą
     if (counter > 9999) {
-      // Jeśli przekroczymy limit, użyj UUID jako fallback
       identifier = `${prefix}-${uuidv4().substring(0, 8).toUpperCase()}`;
       break;
     }
   }
   
   return identifier;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Pomocnicza funkcja do czyszczenia cache
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function clearScooterCaches(scooterId = null) {
+  try {
+    if (scooterId) {
+      await redis.del(`scooter:${scooterId}`);
+    }
+    
+    const cacheKeys = await redis.keys('scooters:all:*');
+    if (cacheKeys.length > 0) {
+      await redis.del(...cacheKeys);
+    }
+    await redis.del('scooters:stats');
+    await redis.del('scooters:models');
+  } catch (error) {
+    console.warn('Błąd czyszczenia cache hulajnóg:', error.message);
+  }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -83,12 +96,10 @@ export async function createScooter({ model, latitude, longitude, battery = 100,
     const scooterId = uuidv4();
     const now = new Date().toISOString();
 
-    // Generuj identyfikator jeśli nie podano
     let finalIdentifier = identifier;
     if (!finalIdentifier || finalIdentifier.trim() === '') {
       finalIdentifier = await generateUniqueIdentifier(model);
     } else {
-      // Sprawdź unikalność podanego identyfikatora
       finalIdentifier = finalIdentifier.trim().toUpperCase();
       const isUnique = await isIdentifierUnique(finalIdentifier);
       if (!isUnique) {
@@ -103,7 +114,7 @@ export async function createScooter({ model, latitude, longitude, battery = 100,
       latitude,
       longitude,
       battery,
-      status: 'available', // available, reserved, in_use, maintenance
+      status: 'available',
       createdAt: now,
       updatedAt: now,
       totalRides: 0,
@@ -117,20 +128,14 @@ export async function createScooter({ model, latitude, longitude, battery = 100,
 
     await docClient.send(command);
 
-    // Dodaj do Redis GEO dla szybkiego wyszukiwania geograficznego
+    // Dodaj do Redis GEO (jeśli włączony)
     await redis.geoadd('scooters:locations', longitude, latitude, scooterId);
 
     // Zapisz w cache
     await redis.setex(`scooter:${scooterId}`, 300, JSON.stringify(scooter));
 
-    // Usuń cache listy wszystkich hulajnóg, aby odświeżyć listę
-    // Usuń wszystkie cache'e związane z listą hulajnóg
-    const cacheKeys = await redis.keys('scooters:all:*');
-    if (cacheKeys.length > 0) {
-      await redis.del(...cacheKeys);
-    }
-    await redis.del('scooters:stats');
-    await redis.del('scooters:models');
+    // Wyczyść cache listy
+    await clearScooterCaches();
 
     return scooter;
   } catch (error) {
@@ -236,7 +241,7 @@ export async function getScootersByStatus(status, limit = 100) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Pobierz hulajnogi w promieniu (używa Redis GEO)
+// Pobierz hulajnogi w promieniu (z fallbackiem na DynamoDB)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function getScootersNearby(
   latitude,
@@ -247,20 +252,44 @@ export async function getScootersNearby(
   model = null
 ) {
   try {
-    // Użyj Redis GEOSEARCH dla szybkiego wyszukiwania
-    const scooterIds = await redis.geosearch(
-      'scooters:locations',
-      'FROMLONLAT',
-      longitude,
-      latitude,
-      'BYRADIUS',
-      radius,
-      'm',
-      'ASC'
-    );
+    let scooterIds = [];
+    
+    // Próbuj użyć Redis GEOSEARCH jeśli włączony
+    if (redis.isEnabled()) {
+      scooterIds = await redis.geosearch(
+        'scooters:locations',
+        'FROMLONLAT',
+        longitude,
+        latitude,
+        'BYRADIUS',
+        radius,
+        'm',
+        'ASC'
+      );
+    }
 
+    // Jeśli Redis wyłączony lub brak wyników, użyj DynamoDB (bez filtrowania geograficznego)
     if (!scooterIds || scooterIds.length === 0) {
-      return [];
+      console.log('[ScooterService] Redis GEO niedostępny, używam DynamoDB fallback');
+      
+      // Pobierz wszystkie hulajnogi i filtruj po stronie aplikacji
+      const allScooters = await getAllScooters(500);
+      
+      // Filtruj według odległości (Haversine formula)
+      const filtered = (allScooters.scooters || []).filter(scooter => {
+        const distance = calculateDistance(
+          latitude, longitude,
+          scooter.latitude, scooter.longitude
+        );
+        
+        if (distance > radius) return false;
+        if (scooter.battery < minBattery) return false;
+        if (status !== null && status !== undefined && scooter.status !== status) return false;
+        if (model && scooter.model !== model) return false;
+        return true;
+      });
+      
+      return filtered;
     }
 
     // Pobierz szczegóły każdej hulajnogi
@@ -275,7 +304,6 @@ export async function getScootersNearby(
     const filtered = scooters.filter((s) => {
       if (!s) return false;
       if (s.battery < minBattery) return false;
-      // Jeśli status jest null, pokaż wszystkie (nie filtruj po statusie)
       if (status !== null && status !== undefined && s.status !== status) return false;
       if (model && s.model !== model) return false;
       return true;
@@ -289,6 +317,25 @@ export async function getScootersNearby(
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Pomocnicza funkcja do obliczania odległości (Haversine)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000; // Promień Ziemi w metrach
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+function toRad(deg) {
+  return deg * (Math.PI / 180);
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Aktualizuj hulajnogę
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function updateScooter(scooterId, updates) {
@@ -298,7 +345,6 @@ export async function updateScooter(scooterId, updates) {
     const expressionAttributeNames = {};
     const expressionAttributeValues = {};
 
-    // Sprawdź unikalność identyfikatora jeśli jest aktualizowany
     if (updates.identifier !== undefined) {
       const newIdentifier = updates.identifier.trim().toUpperCase();
       const isUnique = await isIdentifierUnique(newIdentifier, scooterId);
@@ -320,7 +366,6 @@ export async function updateScooter(scooterId, updates) {
       throw new Error('Brak prawidłowych pól do aktualizacji');
     }
 
-    // Dodaj updatedAt
     updateExpressions.push('#updatedAt = :updatedAt');
     expressionAttributeNames['#updatedAt'] = 'updatedAt';
     expressionAttributeValues[':updatedAt'] = new Date().toISOString();
@@ -346,15 +391,8 @@ export async function updateScooter(scooterId, updates) {
       );
     }
 
-    // Usuń cache
-    await redis.del(`scooter:${scooterId}`);
-    // Usuń wszystkie cache'e związane z listą hulajnóg
-    const cacheKeys = await redis.keys('scooters:all:*');
-    if (cacheKeys.length > 0) {
-      await redis.del(...cacheKeys);
-    }
-    await redis.del('scooters:stats');
-    await redis.del('scooters:models');
+    // Wyczyść cache
+    await clearScooterCaches(scooterId);
 
     return response.Attributes;
   } catch (error) {
@@ -377,14 +415,7 @@ export async function deleteScooter(scooterId) {
 
     // Usuń z Redis GEO i cache
     await redis.zrem('scooters:locations', scooterId);
-    await redis.del(`scooter:${scooterId}`);
-    // Usuń wszystkie cache'e związane z listą hulajnóg
-    const cacheKeys = await redis.keys('scooters:all:*');
-    if (cacheKeys.length > 0) {
-      await redis.del(...cacheKeys);
-    }
-    await redis.del('scooters:stats');
-    await redis.del('scooters:models');
+    await clearScooterCaches(scooterId);
 
     return { success: true };
   } catch (error) {
@@ -445,7 +476,6 @@ export async function getAvailableModels() {
     const response = await docClient.send(command);
     const scooters = response.Items || [];
 
-    // Wyciągnij unikalne modele
     const models = [...new Set(scooters.map((s) => s.model).filter(Boolean))].sort();
 
     // Zapisz w cache na 5 minut

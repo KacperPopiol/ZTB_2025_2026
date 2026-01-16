@@ -8,6 +8,8 @@ import {
   getPricing,
   updatePricing,
   logout,
+  getSystemStatus,
+  toggleRedisStatus,
 } from "../services/api";
 import LocationPicker from "../components/LocationPicker";
 
@@ -41,9 +43,13 @@ export default function AdminPanel() {
     minimumRidePrice: 5.0,
   });
 
+  // Stan dla Redisa
+  const [redisEnabled, setRedisEnabled] = useState(true);
+
   useEffect(() => {
     loadScooters();
     loadPricing();
+    loadSystemConfig();
   }, []);
 
   // Resetuj stronę gdy zmienia się wyszukiwanie
@@ -120,6 +126,38 @@ export default function AdminPanel() {
       });
     } catch (error) {
       console.error("Błąd ładowania cen:", error);
+    }
+  };
+
+  const loadSystemConfig = async () => {
+    try {
+      const response = await getSystemStatus();
+      setRedisEnabled(response.redisEnabled);
+    } catch (error) {
+      console.error("Błąd ładowania konfiguracji:", error);
+      setMessage({ type: "error", text: "Nie udało się pobrać statusu systemu" });
+    }
+  };
+
+  const handleRedisToggle = async () => {
+    const newState = !redisEnabled;
+    // Optymistyczna aktualizacja UI (zmiana od razu, zanim serwer odpowie)
+    setRedisEnabled(newState);
+    
+    try {
+      await toggleRedisStatus(newState);
+      
+      setMessage({ 
+        type: "success", 
+        text: `Redis został ${newState ? 'włączony' : 'wyłączony'}.` 
+      });
+    } catch (error) {
+      // Cofnij zmianę w UI w przypadku błędu
+      setRedisEnabled(!newState);
+      setMessage({ 
+        type: "error", 
+        text: "Nie udało się zmienić statusu Redisa" 
+      });
     }
   };
 
@@ -340,6 +378,12 @@ export default function AdminPanel() {
               }`}
             >
               Ceny
+            </button>
+            <button
+              onClick={() => setActiveTab("system")}
+              className={`px-6 py-3 font-medium ${activeTab === "system" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600 hover:text-gray-800"}`}
+            >
+              System
             </button>
           </div>
 
@@ -746,6 +790,44 @@ export default function AdminPanel() {
                     {loading ? "Zapisywanie..." : "Zapisz ceny"}
                   </button>
                 </form>
+              </div>
+            )}
+
+            {/* System Tab */}
+            {activeTab === "system" && (
+              <div>
+                <h2 className="text-2xl font-bold mb-4">Konfiguracja Systemu</h2>
+                <div className="bg-gray-50 p-6 rounded-lg border border-gray-200 max-w-2xl">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-medium text-gray-900">Status Redis Cache</h3>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Włącz lub wyłącz obsługę bazy Redis. Wyłączenie może spowolnić działanie aplikacji.
+                      </p>
+                      <div className="mt-2 text-xs">
+                        Status połączenia: 
+                        <span className={`ml-2 font-bold ${redisEnabled ? 'text-green-600' : 'text-red-600'}`}>
+                          {redisEnabled ? 'AKTYWNY' : 'NIEAKTYWNY'}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* Toggle Switch Component */}
+                    <button
+                      onClick={handleRedisToggle}
+                      className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                        redisEnabled ? 'bg-green-500' : 'bg-gray-300'
+                      }`}
+                    >
+                      <span className="sr-only">Włącz Redis</span>
+                      <span
+                        className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform ${
+                          redisEnabled ? 'translate-x-7' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

@@ -274,4 +274,18 @@ export const topUpWallet = async (amount) => {
   return response.data;
 };
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SYSTEM / CONFIG
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export const getSystemStatus = async () => {
+  const response = await api.get("/system/status");
+  return response.data;
+};
+
+export const toggleRedisStatus = async (enabled) => {
+  const response = await api.post("/system/redis", { enabled });
+  return response.data;
+};
+
 export default api;

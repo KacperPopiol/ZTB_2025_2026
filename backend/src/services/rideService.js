@@ -1,7 +1,7 @@
 import { PutCommand, GetCommand, UpdateCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
 import docClient, { TABLES } from '../dynamodb.js';
-import redis from '../redis.js';
+import redis from '../redisWrapper.js'; // ← Zmiana importu
 import { getPricing } from './pricingService.js';
 import { deductFromWallet, getUserById } from './userService.js';
 import { updateScooterStatus } from './scooterService.js';
@@ -11,7 +11,7 @@ import { updateScooterStatus } from './scooterService.js';
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function getActiveRideByUser(userId) {
   try {
-    // Sprawdź Redis
+    // Sprawdź Redis (jeśli włączony)
     const rideId = await redis.get(`ride:user:${userId}`);
     if (rideId) {
       const ride = await getRideById(rideId);
@@ -20,7 +20,7 @@ export async function getActiveRideByUser(userId) {
       }
     }
 
-    // Sprawdź DynamoDB
+    // Sprawdź DynamoDB (zawsze jako fallback lub gdy Redis wyłączony)
     const command = new QueryCommand({
       TableName: TABLES.RIDES,
       IndexName: 'UserIndex',
@@ -77,14 +77,12 @@ export async function getRideById(rideId) {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function endRide(rideId, userId) {
   try {
-    // Pobierz jazdę
     const ride = await getRideById(rideId);
 
     if (!ride) {
       throw new Error('Jazda nie została znaleziona');
     }
 
-    // Sprawdź czy użytkownik jest właścicielem jazdy
     if (ride.userId !== userId) {
       throw new Error('Nie masz uprawnień do zakończenia tej jazdy');
     }
@@ -95,29 +93,24 @@ export async function endRide(rideId, userId) {
 
     const now = new Date();
     const startedAt = new Date(ride.startedAt);
-    const durationMinutes = Math.ceil((now - startedAt) / (1000 * 60)); // Zaokrąglenie w górę
+    const durationMinutes = Math.ceil((now - startedAt) / (1000 * 60));
 
-    // Oblicz końcową cenę - pobierz opłatę za minuty, które jeszcze nie zostały pobrane
     const pricing = await getPricing();
     const lastChargedMinutes = ride.lastChargedMinutes || 0;
     const minutesToCharge = durationMinutes - lastChargedMinutes;
     
     let totalPrice = ride.totalCharged || 0;
     
-    // Jeśli są minuty do pobrania, pobierz opłatę
     if (minutesToCharge > 0) {
       const chargeAmount = minutesToCharge * pricing.ridePerMinute;
       
-      // Sprawdź czy użytkownik ma wystarczające środki
       const user = await getUserById(ride.userId);
       const currentBalance = user.walletBalance || 0;
       
       if (currentBalance >= chargeAmount) {
-        // Pobierz opłatę
         await deductFromWallet(ride.userId, chargeAmount);
         totalPrice += chargeAmount;
       } else {
-        // Jeśli brak środków, pobierz tyle ile jest dostępne
         if (currentBalance > 0) {
           await deductFromWallet(ride.userId, currentBalance);
           totalPrice += currentBalance;
@@ -125,7 +118,6 @@ export async function endRide(rideId, userId) {
       }
     }
 
-    // Aktualizuj status jazdy
     const command = new UpdateCommand({
       TableName: TABLES.RIDES,
       Key: { rideId },
@@ -149,12 +141,11 @@ export async function endRide(rideId, userId) {
 
     await docClient.send(command);
 
-    // Usuń z Redis
+    // Usuń z Redis (wrapper zignoruje jeśli wyłączony)
     await redis.del(`ride:user:${userId}`);
     await redis.del(`ride:scooter:${ride.scooterId}`);
     await redis.del(`ride:charge:${rideId}`);
 
-    // Zmień status hulajnogi na dostępną
     await updateScooterStatus(ride.scooterId, 'available');
 
     return {
@@ -187,7 +178,6 @@ export async function getRidePerMinutePrice() {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function chargeForActiveRides() {
   try {
-    // Pobierz wszystkie aktywne jazdy
     const command = new ScanCommand({
       TableName: TABLES.RIDES,
       FilterExpression: '#status = :status',
@@ -211,35 +201,29 @@ export async function chargeForActiveRides() {
     let charged = 0;
     let ended = 0;
 
-    // Przetwórz każdą aktywną jazdę
     for (const ride of activeRides) {
       try {
         const now = new Date();
         const startedAt = new Date(ride.startedAt);
-        const elapsedMinutes = Math.ceil((now - startedAt) / (1000 * 60)); // Zaokrąglenie w górę - każda rozpoczęta minuta jest płatna
+        const elapsedMinutes = Math.ceil((now - startedAt) / (1000 * 60));
         const lastChargedMinutes = ride.lastChargedMinutes || 0;
 
-        // Jeśli minęła nowa minuta, pobierz opłatę
         if (elapsedMinutes > lastChargedMinutes) {
           const minutesToCharge = elapsedMinutes - lastChargedMinutes;
           const chargeAmount = minutesToCharge * pricePerMinute;
 
-          // Sprawdź czy użytkownik ma wystarczające środki
           const user = await getUserById(ride.userId);
           const currentBalance = user.walletBalance || 0;
 
           if (currentBalance < chargeAmount) {
-            // Zakończ jazdę - brak środków
             console.log(`Brak środków dla jazdy ${ride.rideId}, kończenie jazdy...`);
             await endRide(ride.rideId, ride.userId);
             ended++;
             continue;
           }
 
-          // Pobierz opłatę
           await deductFromWallet(ride.userId, chargeAmount);
 
-          // Zaktualizuj jazdę
           const updateCommand = new UpdateCommand({
             TableName: TABLES.RIDES,
             Key: { rideId: ride.rideId },
@@ -262,7 +246,6 @@ export async function chargeForActiveRides() {
         }
       } catch (error) {
         console.error(`Błąd pobierania opłaty za jazdę ${ride.rideId}:`, error);
-        // Jeśli błąd to brak środków, zakończ jazdę
         if (error.message.includes('Niewystarczające środki')) {
           try {
             await endRide(ride.rideId, ride.userId);
@@ -308,4 +291,3 @@ export async function getUserRides(userId, limit = 20) {
     throw error;
   }
 }
-

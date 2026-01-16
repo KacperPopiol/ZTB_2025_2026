@@ -5,6 +5,7 @@ import scooterRoutes from "./scooters.js";
 import reservationRoutes from "./reservations.js";
 import pricingRoutes from "./pricing.js";
 import rideRoutes from "./rides.js";
+import systemRoutes from "./system.js";
 import { initializeDynamoDB } from "../utils/initDynamoDB.js";
 import { seedScooters } from "../utils/seedData.js";
 
@@ -31,6 +32,9 @@ router.use("/pricing", pricingRoutes);
 
 // Jazdy
 router.use("/rides", rideRoutes);
+
+// System
+router.use("/system", systemRoutes);
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Utility Routes

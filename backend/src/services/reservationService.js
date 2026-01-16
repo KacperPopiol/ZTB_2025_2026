@@ -1,20 +1,31 @@
 import { PutCommand, GetCommand, UpdateCommand, DeleteCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
 import docClient, { TABLES } from '../dynamodb.js';
-import redis from '../redis.js';
+import redis from '../redisWrapper.js'; // ← Zmiana importu
 import { getScooterById, updateScooterStatus } from './scooterService.js';
 import { getActivationFee } from './pricingService.js';
 import { deductFromWallet } from './userService.js';
 
-// Czas rezerwacji w sekundach (domyślnie 5 minut)
 const RESERVATION_TTL = 300;
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Sprawdź czy hulajnoga jest zarezerwowana (z DynamoDB jako fallback)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function isScooterReservedInDB(scooterId) {
+  try {
+    const scooter = await getScooterById(scooterId);
+    return scooter && scooter.status === 'reserved';
+  } catch (error) {
+    console.error('Błąd sprawdzania rezerwacji w DB:', error);
+    return false;
+  }
+}
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Utwórz rezerwację
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function createReservation(userId, scooterId) {
   try {
-    // Sprawdź czy hulajnoga istnieje i jest dostępna
     const scooter = await getScooterById(scooterId);
 
     if (!scooter) {
@@ -25,20 +36,25 @@ export async function createReservation(userId, scooterId) {
       throw new Error('Hulajnoga nie jest dostępna');
     }
 
-    // Sprawdź czy użytkownik nie ma już aktywnej rezerwacji
     const existingReservation = await getActiveReservationByUser(userId);
     if (existingReservation) {
       throw new Error('Masz już aktywną rezerwację');
     }
 
-    // Sprawdź czy hulajnoga nie jest już zarezerwowana (Redis)
+    // Sprawdź czy hulajnoga nie jest już zarezerwowana
     const redisKey = `reservation:scooter:${scooterId}`;
-    const exists = await redis.exists(redisKey);
-    if (exists) {
+    const existsInRedis = await redis.exists(redisKey);
+    
+    // Jeśli Redis wyłączony, sprawdź w DynamoDB
+    if (!redis.isEnabled()) {
+      const isReservedInDB = await isScooterReservedInDB(scooterId);
+      if (isReservedInDB) {
+        throw new Error('Hulajnoga jest już zarezerwowana');
+      }
+    } else if (existsInRedis) {
       throw new Error('Hulajnoga jest już zarezerwowana');
     }
 
-    // Rezerwacja blokuje hulajnogę na 5 minut
     const reservationId = uuidv4();
     const now = new Date().toISOString();
     const expiresAt = new Date(Date.now() + RESERVATION_TTL * 1000).toISOString();
@@ -47,13 +63,12 @@ export async function createReservation(userId, scooterId) {
       reservationId,
       userId,
       scooterId,
-      status: 'active', // active, completed, cancelled, expired
+      status: 'active',
       price: 0,
       createdAt: now,
       expiresAt,
     };
 
-    // Zapisz w DynamoDB
     const command = new PutCommand({
       TableName: TABLES.RESERVATIONS,
       Item: reservation,
@@ -61,11 +76,10 @@ export async function createReservation(userId, scooterId) {
 
     await docClient.send(command);
 
-    // Zapisz w Redis z TTL (atomowa operacja)
+    // Zapisz w Redis z TTL (jeśli włączony)
     await redis.set(redisKey, userId, 'EX', RESERVATION_TTL);
     await redis.set(`reservation:user:${userId}`, reservationId, 'EX', RESERVATION_TTL);
 
-    // Zmień status hulajnogi
     await updateScooterStatus(scooterId, 'reserved');
 
     return {
@@ -113,7 +127,7 @@ export async function getActiveReservationByUser(userId) {
       return await getReservationById(reservationId);
     }
 
-    // Sprawdź DynamoDB
+    // Sprawdź DynamoDB (zawsze jako fallback)
     const command = new QueryCommand({
       TableName: TABLES.RESERVATIONS,
       IndexName: 'UserIndex',
@@ -175,14 +189,12 @@ export async function getUserReservations(userId, limit = 20) {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function cancelReservation(reservationId, userId) {
   try {
-    // Pobierz rezerwację
     const reservation = await getReservationById(reservationId);
 
     if (!reservation) {
       throw new Error('Rezerwacja nie została znaleziona');
     }
 
-    // Sprawdź czy użytkownik jest właścicielem rezerwacji
     if (reservation.userId !== userId) {
       throw new Error('Nie masz uprawnień do anulowania tej rezerwacji');
     }
@@ -191,7 +203,6 @@ export async function cancelReservation(reservationId, userId) {
       throw new Error('Rezerwacja nie jest aktywna');
     }
 
-    // Aktualizuj status w DynamoDB
     const command = new UpdateCommand({
       TableName: TABLES.RESERVATIONS,
       Key: { reservationId },
@@ -213,7 +224,6 @@ export async function cancelReservation(reservationId, userId) {
     await redis.del(`reservation:scooter:${reservation.scooterId}`);
     await redis.del(`reservation:user:${userId}`);
 
-    // Zmień status hulajnogi na dostępną
     await updateScooterStatus(reservation.scooterId, 'available');
 
     return { success: true, message: 'Rezerwacja anulowana' };
@@ -228,14 +238,12 @@ export async function cancelReservation(reservationId, userId) {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function startRide(reservationId, userId) {
   try {
-    // Pobierz rezerwację
     const reservation = await getReservationById(reservationId);
 
     if (!reservation) {
       throw new Error('Rezerwacja nie została znaleziona');
     }
 
-    // Sprawdź czy użytkownik jest właścicielem rezerwacji
     if (reservation.userId !== userId) {
       throw new Error('Nie masz uprawnień do tej rezerwacji');
     }
@@ -244,11 +252,9 @@ export async function startRide(reservationId, userId) {
       throw new Error('Rezerwacja nie jest aktywna');
     }
 
-    // Pobierz opłatę aktywacyjną i sprawdź portfel
     const activationFee = await getActivationFee();
     await deductFromWallet(userId, activationFee);
 
-    // Aktualizuj status rezerwacji
     const updateReservationCommand = new UpdateCommand({
       TableName: TABLES.RESERVATIONS,
       Key: { reservationId },
@@ -265,7 +271,6 @@ export async function startRide(reservationId, userId) {
 
     await docClient.send(updateReservationCommand);
 
-    // Utwórz nową jazdę
     const rideId = uuidv4();
     const now = new Date().toISOString();
 
@@ -274,12 +279,12 @@ export async function startRide(reservationId, userId) {
       userId,
       scooterId: reservation.scooterId,
       reservationId,
-      status: 'active', // active, completed
+      status: 'active',
       startedAt: now,
-      startBattery: 0, // Zostanie zaktualizowane
-      activationFee, // Opłata aktywacyjna
-      lastChargedMinutes: 0, // Ostatnia minuta za którą pobrano opłatę
-      totalCharged: activationFee, // Całkowita pobrana opłata (włącznie z opłatą aktywacyjną)
+      startBattery: 0,
+      activationFee,
+      lastChargedMinutes: 0,
+      totalCharged: activationFee,
     };
 
     const createRideCommand = new PutCommand({
@@ -297,7 +302,6 @@ export async function startRide(reservationId, userId) {
     await redis.set(`ride:user:${userId}`, rideId);
     await redis.set(`ride:scooter:${reservation.scooterId}`, rideId);
 
-    // Zmień status hulajnogi
     await updateScooterStatus(reservation.scooterId, 'in_use');
 
     return ride;
@@ -312,8 +316,16 @@ export async function startRide(reservationId, userId) {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function isScooterReserved(scooterId) {
   try {
+    // Sprawdź Redis
     const exists = await redis.exists(`reservation:scooter:${scooterId}`);
-    return exists === 1;
+    if (exists === 1) return true;
+    
+    // Jeśli Redis wyłączony, sprawdź w DynamoDB
+    if (!redis.isEnabled()) {
+      return await isScooterReservedInDB(scooterId);
+    }
+    
+    return false;
   } catch (error) {
     console.error('Błąd sprawdzania rezerwacji hulajnogi:', error);
     return false;
@@ -325,9 +337,6 @@ export async function isScooterReserved(scooterId) {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function expireOldReservations() {
   try {
-    // Redis automatycznie usuwa klucze z TTL
-    // Tutaj aktualizujemy status w DynamoDB dla rezerwacji, które wygasły
-
     const command = new QueryCommand({
       TableName: TABLES.RESERVATIONS,
       FilterExpression: '#status = :status AND #expiresAt < :now',
@@ -347,7 +356,6 @@ export async function expireOldReservations() {
       return { expired: 0 };
     }
 
-    // Aktualizuj każdą wygasłą rezerwację
     const updatePromises = response.Items.map(async (reservation) => {
       const updateCommand = new UpdateCommand({
         TableName: TABLES.RESERVATIONS,
@@ -362,8 +370,6 @@ export async function expireOldReservations() {
       });
 
       await docClient.send(updateCommand);
-
-      // Zmień status hulajnogi na dostępną
       await updateScooterStatus(reservation.scooterId, 'available');
     });
 
