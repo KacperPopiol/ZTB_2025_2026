@@ -6,6 +6,7 @@ import {
   getAllScooters,
   getScootersByStatus,
   getScootersNearby,
+  getScootersInBounds,
   updateScooter,
   deleteScooter,
   updateScooterStatus,
@@ -84,6 +85,64 @@ router.get('/', optionalAuth, async (req, res) => {
   } catch (error) {
     console.error('Błąd pobierania hulajnóg:', error);
     res.status(500).json({ error: 'Błąd serwera' });
+  }
+});
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// NOWY ENDPOINT: GET /api/scooters/all - Pobierz wszystkie hulajnogi Z PAGINACJĄ
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+router.get('/all', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 100;
+    const lastEvaluatedKey = req.query.lastEvaluatedKey 
+      ? JSON.parse(req.query.lastEvaluatedKey)
+      : null;
+
+    const result = await getAllScooters(limit, lastEvaluatedKey);
+
+    res.json({
+      success: true,
+      scooters: result.scooters,
+      lastEvaluatedKey: result.lastEvaluatedKey,
+      hasMore: result.hasMore,
+      count: result.count,
+    });
+  } catch (error) {
+    console.error('Błąd pobierania hulajnóg:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Błąd pobierania hulajnóg',
+    });
+  }
+});
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// NOWY ENDPOINT: POST /api/scooters/bounds - Pobierz hulajnogi w granicach mapy
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+router.post('/bounds', async (req, res) => {
+  try {
+    const { bounds, limit = 500, status = null } = req.body;
+
+    if (!bounds || !bounds.north || !bounds.south || !bounds.east || !bounds.west) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nieprawidłowe granice mapy',
+      });
+    }
+
+    const result = await getScootersInBounds(bounds, limit, status);
+
+    res.json({
+      success: true,
+      scooters: result.scooters,
+      count: result.count,
+    });
+  } catch (error) {
+    console.error('Błąd pobierania hulajnóg w granicach:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Błąd pobierania hulajnóg',
+    });
   }
 });
 

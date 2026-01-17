@@ -1,7 +1,7 @@
 import { PutCommand, GetCommand, UpdateCommand, DeleteCommand, ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
 import docClient, { TABLES } from '../dynamodb.js';
-import redis from '../redisWrapper.js'; // ← Zmiana importu
+import redis from '../redisWrapper.js';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Generuj skrót modelu dla identyfikatora
@@ -177,33 +177,29 @@ export async function getScooterById(scooterId) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Pobierz wszystkie hulajnogi
+// Pobierz wszystkie hulajnogi Z PAGINACJĄ
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-export async function getAllScooters(limit = 100) {
+export async function getAllScooters(limit = 100, lastEvaluatedKey = null) {
   try {
-    // Sprawdź cache
-    const cacheKey = `scooters:all:${limit}`;
-    const cached = await redis.get(cacheKey);
-    if (cached) {
-      return JSON.parse(cached);
-    }
-
-    const command = new ScanCommand({
+    const params = {
       TableName: TABLES.SCOOTERS,
       Limit: limit,
-    });
-
-    const response = await docClient.send(command);
-
-    const result = {
-      scooters: response.Items || [],
-      lastKey: response.LastEvaluatedKey,
     };
 
-    // Zapisz w cache na 2 minuty
-    await redis.setex(cacheKey, 120, JSON.stringify(result));
+    // Dodaj ExclusiveStartKey jeśli jest paginacja
+    if (lastEvaluatedKey) {
+      params.ExclusiveStartKey = lastEvaluatedKey;
+    }
 
-    return result;
+    const command = new ScanCommand(params);
+    const response = await docClient.send(command);
+
+    return {
+      scooters: response.Items || [],
+      lastEvaluatedKey: response.LastEvaluatedKey || null,
+      hasMore: !!response.LastEvaluatedKey,
+      count: response.Items?.length || 0,
+    };
   } catch (error) {
     console.error('Błąd pobierania hulajnóg:', error);
     throw error;
@@ -211,11 +207,11 @@ export async function getAllScooters(limit = 100) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Pobierz hulajnogi po statusie
+// Pobierz hulajnogi po statusie Z PAGINACJĄ
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-export async function getScootersByStatus(status, limit = 100) {
+export async function getScootersByStatus(status, limit = 100, lastEvaluatedKey = null) {
   try {
-    const command = new QueryCommand({
+    const params = {
       TableName: TABLES.SCOOTERS,
       IndexName: 'StatusIndex',
       KeyConditionExpression: '#status = :status',
@@ -226,16 +222,62 @@ export async function getScootersByStatus(status, limit = 100) {
         ':status': status,
       },
       Limit: limit,
-    });
+    };
 
+    if (lastEvaluatedKey) {
+      params.ExclusiveStartKey = lastEvaluatedKey;
+    }
+
+    const command = new QueryCommand(params);
     const response = await docClient.send(command);
 
     return {
       scooters: response.Items || [],
-      lastKey: response.LastEvaluatedKey,
+      lastEvaluatedKey: response.LastEvaluatedKey || null,
+      hasMore: !!response.LastEvaluatedKey,
+      count: response.Items?.length || 0,
     };
   } catch (error) {
     console.error('Błąd pobierania hulajnóg po statusie:', error);
+    throw error;
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// NOWA FUNKCJA: Pobierz hulajnogi w granicach mapy (bounds)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+export async function getScootersInBounds(bounds, limit = 500, status = null) {
+  try {
+    const { north, south, east, west } = bounds;
+
+    const params = {
+      TableName: TABLES.SCOOTERS,
+      FilterExpression: 'latitude BETWEEN :south AND :north AND longitude BETWEEN :west AND :east',
+      ExpressionAttributeValues: {
+        ':north': north,
+        ':south': south,
+        ':east': east,
+        ':west': west,
+      },
+      Limit: limit,
+    };
+
+    // Dodaj filtr po statusie jeśli podany
+    if (status) {
+      params.FilterExpression += ' AND #status = :status';
+      params.ExpressionAttributeNames = { '#status': 'status' };
+      params.ExpressionAttributeValues[':status'] = status;
+    }
+
+    const command = new ScanCommand(params);
+    const response = await docClient.send(command);
+
+    return {
+      scooters: response.Items || [],
+      count: response.Items?.length || 0,
+    };
+  } catch (error) {
+    console.error('Błąd pobierania hulajnóg w granicach:', error);
     throw error;
   }
 }
@@ -254,25 +296,21 @@ export async function getScootersNearby(
   try {
     let scooterIds = [];
     
-    // Próbuj użyć Redis GEOSEARCH jeśli włączony
-    if (redis.isEnabled()) {
-      scooterIds = await redis.geosearch(
+    // Spróbuj użyć Redis GEO
+    try {
+      scooterIds = await redis.georadius(
         'scooters:locations',
-        'FROMLONLAT',
         longitude,
         latitude,
-        'BYRADIUS',
         radius,
-        'm',
-        'ASC'
+        'm'
       );
+    } catch (redisError) {
+      console.warn('Redis GEO niedostępny, używam fallback do DynamoDB');
     }
 
-    // Jeśli Redis wyłączony lub brak wyników, użyj DynamoDB (bez filtrowania geograficznego)
+    // Fallback: jeśli Redis nie działa, użyj DynamoDB Scan
     if (!scooterIds || scooterIds.length === 0) {
-      console.log('[ScooterService] Redis GEO niedostępny, używam DynamoDB fallback');
-      
-      // Pobierz wszystkie hulajnogi i filtruj po stronie aplikacji
       const allScooters = await getAllScooters(500);
       
       // Filtruj według odległości (Haversine formula)
@@ -499,12 +537,29 @@ export async function getScooterStats() {
       return JSON.parse(cached);
     }
 
-    const command = new ScanCommand({
-      TableName: TABLES.SCOOTERS,
-    });
+    // Scan ALL pages to get accurate count
+    let scooters = [];
+    let lastEvaluatedKey = null;
 
-    const response = await docClient.send(command);
-    const scooters = response.Items || [];
+    do {
+      const params = {
+        TableName: TABLES.SCOOTERS,
+        ProjectionExpression: '#status, battery',
+        ExpressionAttributeNames: {
+          '#status': 'status',
+        },
+      };
+
+      if (lastEvaluatedKey) {
+        params.ExclusiveStartKey = lastEvaluatedKey;
+      }
+
+      const command = new ScanCommand(params);
+      const response = await docClient.send(command);
+
+      scooters = scooters.concat(response.Items || []);
+      lastEvaluatedKey = response.LastEvaluatedKey;
+    } while (lastEvaluatedKey);
 
     const stats = {
       total: scooters.length,

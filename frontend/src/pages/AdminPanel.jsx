@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   getAllScooters,
@@ -19,8 +19,13 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
 
-  // Scooters
+  // Scooters z infinite scroll
   const [scooters, setScooters] = useState([]);
+  const [lastEvaluatedKey, setLastEvaluatedKey] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [totalLoaded, setTotalLoaded] = useState(0);
+  
   const [editingScooter, setEditingScooter] = useState(null);
   const [scooterForm, setScooterForm] = useState({
     identifier: "",
@@ -33,8 +38,6 @@ export default function AdminPanel() {
   
   // Paginacja i wyszukiwanie
   const [searchQuery, setSearchQuery] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Pricing
   const [pricing, setPricing] = useState({
@@ -46,16 +49,29 @@ export default function AdminPanel() {
   // Stan dla Redisa
   const [redisEnabled, setRedisEnabled] = useState(true);
 
+  // Ref dla infinite scroll observer
+  const observer = useRef();
+  const lastScooterRef = useCallback(
+    (node) => {
+      if (loadingMore || searchQuery.trim()) return; // Don't observe when searching
+      if (observer.current) observer.current.disconnect();
+
+      observer.current = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && hasMore && !searchQuery.trim()) {
+          loadMoreScooters();
+        }
+      });
+
+      if (node) observer.current.observe(node);
+    },
+    [loadingMore, hasMore, searchQuery]
+  );
+
   useEffect(() => {
-    loadScooters();
+    loadInitialScooters();
     loadPricing();
     loadSystemConfig();
   }, []);
-
-  // Resetuj stronę gdy zmienia się wyszukiwanie
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery]);
 
   // Callback dla LocationPicker
   const handleLocationChange = useCallback((lat, lng) => {
@@ -86,32 +102,46 @@ export default function AdminPanel() {
     );
   });
 
-  // Oblicz paginację
-  const totalPages = Math.ceil(filteredScooters.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedScooters = filteredScooters.slice(startIndex, endIndex);
-
-  // Funkcje paginacji
-  const goToPage = (page) => {
-    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
-  };
-
-  const goToPreviousPage = () => {
-    setCurrentPage(prev => Math.max(1, prev - 1));
-  };
-
-  const goToNextPage = () => {
-    setCurrentPage(prev => Math.min(totalPages, prev + 1));
-  };
-
-  const loadScooters = async () => {
+  const loadInitialScooters = async () => {
+    setLoading(true);
     try {
-      const response = await getAllScooters(100);
+      const response = await getAllScooters(100, null);
       setScooters(response.scooters || []);
+      setLastEvaluatedKey(response.lastEvaluatedKey);
+      setHasMore(response.hasMore);
+      setTotalLoaded(response.scooters?.length || 0);
     } catch (error) {
       console.error("Błąd ładowania hulajnóg:", error);
       setMessage({ type: "error", text: "Nie udało się załadować hulajnóg" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadMoreScooters = async () => {
+    if (loadingMore || !hasMore || searchQuery.trim()) return; // Don't load more when searching
+
+    setLoadingMore(true);
+    try {
+      const response = await getAllScooters(100, lastEvaluatedKey);
+      
+      // Deduplicate scooters by scooterId
+      setScooters(prev => {
+        const existingIds = new Set(prev.map(s => s.scooterId));
+        const newScooters = (response.scooters || []).filter(
+          s => !existingIds.has(s.scooterId)
+        );
+        return [...prev, ...newScooters];
+      });
+      
+      setLastEvaluatedKey(response.lastEvaluatedKey);
+      setHasMore(response.hasMore);
+      setTotalLoaded(prev => prev + (response.scooters?.length || 0));
+    } catch (error) {
+      console.error("Błąd ładowania więcej hulajnóg:", error);
+      setMessage({ type: "error", text: "Nie udało się załadować więcej hulajnóg" });
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -141,7 +171,6 @@ export default function AdminPanel() {
 
   const handleRedisToggle = async () => {
     const newState = !redisEnabled;
-    // Optymistyczna aktualizacja UI (zmiana od razu, zanim serwer odpowie)
     setRedisEnabled(newState);
     
     try {
@@ -152,7 +181,6 @@ export default function AdminPanel() {
         text: `Redis został ${newState ? 'włączony' : 'wyłączony'}.` 
       });
     } catch (error) {
-      // Cofnij zmianę w UI w przypadku błędu
       setRedisEnabled(!newState);
       setMessage({ 
         type: "error", 
@@ -167,7 +195,6 @@ export default function AdminPanel() {
     setMessage({ type: "", text: "" });
 
     try {
-      // Wyślij activationFee
       await updatePricing({
         activationFee: pricing.activationFee,
         ridePerMinute: pricing.ridePerMinute,
@@ -205,7 +232,7 @@ export default function AdminPanel() {
         battery: 100,
         status: "available",
       });
-      loadScooters();
+      loadInitialScooters();
     } catch (error) {
       setMessage({
         type: "error",
@@ -216,36 +243,29 @@ export default function AdminPanel() {
     }
   };
 
-  const handleEditScooter = useCallback((scooter) => {
-    const scooterToEdit = {
-      scooterId: scooter.scooterId,
-      identifier: scooter.identifier || "",
-      model: scooter.model || "",
+  const handleEditScooter = (scooter) => {
+    setEditingScooter(scooter);
+    setScooterForm({
+      identifier: scooter.identifier,
+      model: scooter.model,
       latitude: scooter.latitude,
       longitude: scooter.longitude,
-      battery: scooter.battery || 100,
-      status: scooter.status || "available",
-    };
-    
-    setEditingScooter(scooterToEdit);
-    setScooterForm({
-      identifier: scooterToEdit.identifier,
-      model: scooterToEdit.model,
-      latitude: scooterToEdit.latitude?.toString() || "",
-      longitude: scooterToEdit.longitude?.toString() || "",
-      battery: scooterToEdit.battery,
-      status: scooterToEdit.status,
+      battery: scooter.battery,
+      status: scooter.status,
     });
-  }, []);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const handleUpdateScooter = async (e) => {
     e.preventDefault();
+    if (!editingScooter) return;
+
     setLoading(true);
     setMessage({ type: "", text: "" });
 
     try {
       await updateScooter(editingScooter.scooterId, {
-        identifier: scooterForm.identifier || undefined,
+        identifier: scooterForm.identifier,
         model: scooterForm.model,
         latitude: parseFloat(scooterForm.latitude),
         longitude: parseFloat(scooterForm.longitude),
@@ -262,7 +282,7 @@ export default function AdminPanel() {
         battery: 100,
         status: "available",
       });
-      loadScooters();
+      loadInitialScooters();
     } catch (error) {
       setMessage({
         type: "error",
@@ -274,28 +294,21 @@ export default function AdminPanel() {
   };
 
   const handleDeleteScooter = async (scooterId) => {
-    if (!window.confirm("Czy na pewno chcesz usunąć tę hulajnogę?")) {
-      return;
-    }
-
-    setLoading(true);
-    setMessage({ type: "", text: "" });
+    if (!window.confirm("Czy na pewno chcesz usunąć tę hulajnogę?")) return;
 
     try {
       await deleteScooter(scooterId);
       setMessage({ type: "success", text: "Hulajnoga usunięta!" });
-      loadScooters();
+      loadInitialScooters();
     } catch (error) {
       setMessage({
         type: "error",
         text: error.response?.data?.error || "Błąd usuwania hulajnogi",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
-  const cancelEdit = () => {
+  const handleCancelEdit = () => {
     setEditingScooter(null);
     setScooterForm({
       identifier: "",
@@ -307,287 +320,253 @@ export default function AdminPanel() {
     });
   };
 
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
+
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-md px-6 py-4">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-blue-600">🛴 EcoScoot</h1>
-            <p className="text-gray-600 text-sm">Panel administratora</p>
-          </div>
-          <div className="flex gap-4">
+      <div className="bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex justify-between items-center">
+            <h1 className="text-3xl font-bold text-gray-900">Panel Administratora</h1>
             <button
-              onClick={() => navigate("/")}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
-            >
-              🗺️ Mapa
-            </button>
-            <button
-              onClick={() => navigate("/profile")}
-              className="px-4 py-2 bg-gray-600 text-white rounded-lg text-sm font-medium hover:bg-gray-700 transition"
-            >
-              👤 Profil
-            </button>
-            <button
-              onClick={() => {
-                logout();
-                navigate("/login");
-              }}
-              className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition"
+              onClick={handleLogout}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
             >
               Wyloguj
             </button>
           </div>
         </div>
-      </header>
+      </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Message */}
-        {message.text && (
-          <div
-            className={`mb-4 p-4 rounded-lg ${
-              message.type === "success"
-                ? "bg-green-100 text-green-700 border border-green-400"
-                : "bg-red-100 text-red-700 border border-red-400"
-            }`}
-          >
-            {message.text}
-          </div>
-        )}
-
-        {/* Tabs */}
-        <div className="bg-white rounded-lg shadow-md mb-6">
-          <div className="flex border-b">
+      {/* Navigation Tabs */}
+      <div className="bg-white border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <nav className="flex space-x-8">
             <button
               onClick={() => setActiveTab("scooters")}
-              className={`px-6 py-3 font-medium ${
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
                 activeTab === "scooters"
-                  ? "border-b-2 border-blue-600 text-blue-600"
-                  : "text-gray-600 hover:text-gray-800"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
               }`}
             >
               Hulajnogi
             </button>
             <button
               onClick={() => setActiveTab("pricing")}
-              className={`px-6 py-3 font-medium ${
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
                 activeTab === "pricing"
-                  ? "border-b-2 border-blue-600 text-blue-600"
-                  : "text-gray-600 hover:text-gray-800"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
               }`}
             >
-              Ceny
+              Cennik
             </button>
             <button
               onClick={() => setActiveTab("system")}
-              className={`px-6 py-3 font-medium ${activeTab === "system" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600 hover:text-gray-800"}`}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === "system"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
             >
               System
             </button>
-          </div>
+          </nav>
+        </div>
+      </div>
 
-          <div className="p-6">
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          {/* Messages */}
+          {message.text && (
+            <div
+              className={`mb-6 p-4 rounded-lg ${
+                message.type === "success"
+                  ? "bg-green-100 text-green-800 border border-green-300"
+                  : "bg-red-100 text-red-800 border border-red-300"
+              }`}
+            >
+              {message.text}
+            </div>
+          )}
+
+          <div>
             {/* Scooters Tab */}
             {activeTab === "scooters" && (
-              <div className="space-y-6">
-                <div>
-                  <h2 className="text-2xl font-bold mb-4">
-                    {editingScooter ? "Edytuj hulajnogę" : "Dodaj hulajnogę"}
-                  </h2>
-                  <form
-                    onSubmit={editingScooter ? handleUpdateScooter : handleCreateScooter}
-                    className="space-y-4 max-w-md"
-                  >
+              <div>
+                <h2 className="text-2xl font-bold mb-4">
+                  {editingScooter ? "Edytuj hulajnogę" : "Dodaj nową hulajnogę"}
+                </h2>
+                
+                <form
+                  onSubmit={editingScooter ? handleUpdateScooter : handleCreateScooter}
+                  className="space-y-4 max-w-2xl mb-8"
+                >
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Identyfikator (opcjonalny - zostanie wygenerowany automatycznie)
+                    </label>
+                    <input
+                      type="text"
+                      value={scooterForm.identifier}
+                      onChange={(e) =>
+                        setScooterForm({ ...scooterForm, identifier: e.target.value })
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="np. BOLT-001"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Model *
+                    </label>
+                    <input
+                      type="text"
+                      value={scooterForm.model}
+                      onChange={(e) =>
+                        setScooterForm({ ...scooterForm, model: e.target.value })
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Identyfikator (opcjonalnie - zostanie wygenerowany automatycznie)
+                        Szerokość geograficzna *
                       </label>
                       <input
-                        type="text"
-                        value={scooterForm.identifier}
+                        type="number"
+                        step="0.000001"
+                        value={scooterForm.latitude}
                         onChange={(e) =>
-                          setScooterForm({ ...scooterForm, identifier: e.target.value.toUpperCase() })
-                        }
-                        placeholder="np. DT-001"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Jeśli nie podasz, identyfikator zostanie wygenerowany automatycznie na podstawie modelu
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Model
-                      </label>
-                      <input
-                        type="text"
-                        value={scooterForm.model}
-                        onChange={(e) =>
-                          setScooterForm({ ...scooterForm, model: e.target.value })
+                          setScooterForm({ ...scooterForm, latitude: e.target.value })
                         }
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         required
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Lokalizacja (kliknij na mapie lub wpisz ręcznie)
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Długość geograficzna *
                       </label>
-                      <LocationPicker
-                        key={editingScooter ? editingScooter.scooterId : 'new'}
-                        latitude={scooterForm.latitude}
-                        longitude={scooterForm.longitude}
-                        onLocationChange={handleLocationChange}
-                        height="250px"
+                      <input
+                        type="number"
+                        step="0.000001"
+                        value={scooterForm.longitude}
+                        onChange={(e) =>
+                          setScooterForm({ ...scooterForm, longitude: e.target.value })
+                        }
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        required
                       />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Szerokość geograficzna
-                        </label>
-                        <input
-                          type="number"
-                          step="0.000001"
-                          value={scooterForm.latitude}
-                          onChange={(e) =>
-                            setScooterForm({ ...scooterForm, latitude: e.target.value })
-                          }
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Długość geograficzna
-                        </label>
-                        <input
-                          type="number"
-                          step="0.000001"
-                          value={scooterForm.longitude}
-                          onChange={(e) =>
-                            setScooterForm({ ...scooterForm, longitude: e.target.value })
-                          }
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          required
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Bateria (%)
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={scooterForm.battery}
-                          onChange={(e) =>
-                            setScooterForm({ ...scooterForm, battery: e.target.value })
-                          }
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          required
-                        />
-                      </div>
-                      {editingScooter && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Status
-                          </label>
-                          <select
-                            value={scooterForm.status}
-                            onChange={(e) =>
-                              setScooterForm({ ...scooterForm, status: e.target.value })
-                            }
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          >
-                            <option value="available">Dostępna</option>
-                            <option value="reserved">Zarezerwowana</option>
-                            <option value="in_use">W użyciu</option>
-                            <option value="maintenance">W naprawie</option>
-                          </select>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex gap-4">
-                      <button
-                        type="submit"
-                        disabled={loading}
-                        className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50"
-                      >
-                        {loading
-                          ? "Zapisywanie..."
-                          : editingScooter
-                            ? "Zapisz zmiany"
-                            : "Dodaj hulajnogę"}
-                      </button>
-                      {editingScooter && (
-                        <button
-                          type="button"
-                          onClick={cancelEdit}
-                          className="px-6 py-2 bg-gray-500 text-white rounded-lg font-medium hover:bg-gray-600 transition"
-                        >
-                          Anuluj
-                        </button>
-                      )}
-                    </div>
-                  </form>
-                </div>
-
-                <div className="border-t pt-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-2xl font-bold">
-                      Lista hulajnóg ({filteredScooters.length} / {scooters.length})
-                    </h2>
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <label className="text-sm text-gray-600">Pokaż:</label>
-                        <select
-                          value={itemsPerPage}
-                          onChange={(e) => {
-                            setItemsPerPage(parseInt(e.target.value));
-                            setCurrentPage(1);
-                          }}
-                          className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        >
-                          <option value={5}>5</option>
-                          <option value={10}>10</option>
-                          <option value={20}>20</option>
-                          <option value={50}>50</option>
-                          <option value={100}>100</option>
-                        </select>
-                      </div>
                     </div>
                   </div>
-                  
-                  {/* Pasek wyszukiwania */}
-                  <div className="mb-4">
-                    <div className="relative">
+
+                  <LocationPicker 
+                    onLocationChange={handleLocationChange}
+                    initialLat={scooterForm.latitude ? parseFloat(scooterForm.latitude) : undefined}
+                    initialLng={scooterForm.longitude ? parseFloat(scooterForm.longitude) : undefined}
+                  />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Poziom baterii (%) *
+                      </label>
                       <input
-                        type="text"
-                        placeholder="Szukaj po identyfikatorze, modelu, statusie, baterii, lokalizacji..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={scooterForm.battery}
+                        onChange={(e) =>
+                          setScooterForm({ ...scooterForm, battery: e.target.value })
+                        }
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        required
                       />
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                      </div>
-                      {searchQuery && (
-                        <button
-                          onClick={() => setSearchQuery("")}
-                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                    </div>
+                    {editingScooter && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Status
+                        </label>
+                        <select
+                          value={scooterForm.status}
+                          onChange={(e) =>
+                            setScooterForm({ ...scooterForm, status: e.target.value })
+                          }
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
-                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
+                          <option value="available">Dostępna</option>
+                          <option value="reserved">Zarezerwowana</option>
+                          <option value="in_use">W użyciu</option>
+                          <option value="maintenance">W naprawie</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-4">
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50"
+                    >
+                      {loading
+                        ? "Zapisywanie..."
+                        : editingScooter
+                          ? "Zaktualizuj"
+                          : "Utwórz"}
+                    </button>
+                    {editingScooter && (
+                      <button
+                        type="button"
+                        onClick={handleCancelEdit}
+                        className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-400 transition"
+                      >
+                        Anuluj
+                      </button>
+                    )}
+                  </div>
+                </form>
+
+                {/* Lista hulajnóg z infinite scroll */}
+                <div className="mt-8">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-bold">Lista hulajnóg</h3>
+                    <div className="text-sm text-gray-600">
+                      {searchQuery ? (
+                        <>
+                          Znaleziono: <span className="font-bold">{filteredScooters.length.toLocaleString()}</span> hulajnóg
+                          <span className="text-xs ml-2">(wyszukiwanie w {totalLoaded.toLocaleString()} załadowanych)</span>
+                        </>
+                      ) : (
+                        <>
+                          Załadowano: <span className="font-bold">{totalLoaded.toLocaleString()}</span> hulajnóg
+                          {hasMore && !searchQuery && " (przewiń w dół, aby załadować więcej)"}
+                        </>
                       )}
                     </div>
+                  </div>
+
+                  {/* Wyszukiwanie */}
+                  <div className="mb-4">
+                    <input
+                      type="text"
+                      placeholder="Szukaj po identyfikatorze, modelu, statusie, baterii lub lokalizacji..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
                   </div>
 
                   <div className="overflow-x-auto">
@@ -615,121 +594,107 @@ export default function AdminPanel() {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {paginatedScooters.length === 0 ? (
+                        {loading && scooters.length === 0 ? (
+                          <tr>
+                            <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
+                              Ładowanie hulajnóg...
+                            </td>
+                          </tr>
+                        ) : filteredScooters.length === 0 ? (
                           <tr>
                             <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
                               {searchQuery ? "Nie znaleziono hulajnóg pasujących do wyszukiwania" : "Brak hulajnóg"}
                             </td>
                           </tr>
                         ) : (
-                          paginatedScooters.map((scooter) => (
-                            <tr key={scooter.scooterId}>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600">
-                                {scooter.identifier || 'Brak'}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                {scooter.model}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {scooter.latitude?.toFixed(4)}, {scooter.longitude?.toFixed(4)}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {scooter.battery}%
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                <span
-                                  className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                                    scooter.status === "available"
-                                      ? "bg-green-100 text-green-800"
+                          filteredScooters.map((scooter, index) => {
+                            const isLast = index === filteredScooters.length - 1;
+                            
+                            return (
+                              <tr 
+                                key={scooter.scooterId}
+                                ref={isLast && !searchQuery ? lastScooterRef : null}
+                                className="hover:bg-gray-50"
+                              >
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                  {scooter.identifier}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {scooter.model}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {scooter.latitude?.toFixed(4)}, {scooter.longitude?.toFixed(4)}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  <span
+                                    className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                      scooter.battery >= 80
+                                        ? "bg-green-100 text-green-800"
+                                        : scooter.battery >= 50
+                                          ? "bg-yellow-100 text-yellow-800"
+                                          : scooter.battery >= 20
+                                            ? "bg-orange-100 text-orange-800"
+                                            : "bg-red-100 text-red-800"
+                                    }`}
+                                  >
+                                    {scooter.battery}%
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  <span
+                                    className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                      scooter.status === "available"
+                                        ? "bg-green-100 text-green-800"
+                                        : scooter.status === "reserved"
+                                          ? "bg-yellow-100 text-yellow-800"
+                                          : scooter.status === "in_use"
+                                            ? "bg-blue-100 text-blue-800"
+                                            : "bg-gray-100 text-gray-800"
+                                    }`}
+                                  >
+                                    {scooter.status === "available"
+                                      ? "Dostępna"
                                       : scooter.status === "reserved"
-                                        ? "bg-yellow-100 text-yellow-800"
+                                        ? "Zarezerwowana"
                                         : scooter.status === "in_use"
-                                          ? "bg-blue-100 text-blue-800"
-                                          : "bg-gray-100 text-gray-800"
-                                  }`}
-                                >
-                                  {scooter.status === "available"
-                                    ? "Dostępna"
-                                    : scooter.status === "reserved"
-                                      ? "Zarezerwowana"
-                                      : scooter.status === "in_use"
-                                        ? "W użyciu"
-                                        : "W naprawie"}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                <button
-                                  onClick={() => handleEditScooter(scooter)}
-                                  className="text-blue-600 hover:text-blue-900 mr-4"
-                                >
-                                  Edytuj
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteScooter(scooter.scooterId)}
-                                  className="text-red-600 hover:text-red-900"
-                                >
-                                  Usuń
-                                </button>
-                              </td>
-                            </tr>
-                          ))
+                                          ? "W użyciu"
+                                          : "W naprawie"}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                  <button
+                                    onClick={() => handleEditScooter(scooter)}
+                                    className="text-blue-600 hover:text-blue-900 mr-4"
+                                  >
+                                    Edytuj
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteScooter(scooter.scooterId)}
+                                    className="text-red-600 hover:text-red-900"
+                                  >
+                                    Usuń
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })
                         )}
                       </tbody>
                     </table>
                   </div>
 
-                  {/* Paginacja */}
-                  {totalPages > 1 && (
-                    <div className="mt-4 flex items-center justify-between">
-                      <div className="text-sm text-gray-700">
-                        Pokazuję <span className="font-medium">{startIndex + 1}</span> - <span className="font-medium">{Math.min(endIndex, filteredScooters.length)}</span> z <span className="font-medium">{filteredScooters.length}</span> hulajnóg
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={goToPreviousPage}
-                          disabled={currentPage === 1}
-                          className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                        >
-                          Poprzednia
-                        </button>
-                        
-                        <div className="flex items-center gap-1">
-                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                            let pageNum;
-                            if (totalPages <= 5) {
-                              pageNum = i + 1;
-                            } else if (currentPage <= 3) {
-                              pageNum = i + 1;
-                            } else if (currentPage >= totalPages - 2) {
-                              pageNum = totalPages - 4 + i;
-                            } else {
-                              pageNum = currentPage - 2 + i;
-                            }
-                            
-                            return (
-                              <button
-                                key={pageNum}
-                                onClick={() => goToPage(pageNum)}
-                                className={`px-3 py-2 text-sm font-medium rounded-lg transition ${
-                                  currentPage === pageNum
-                                    ? "bg-blue-600 text-white"
-                                    : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
-                                }`}
-                              >
-                                {pageNum}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        
-                        <button
-                          onClick={goToNextPage}
-                          disabled={currentPage === totalPages}
-                          className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                        >
-                          Następna
-                        </button>
-                      </div>
+                  {/* Loading indicator dla infinite scroll */}
+                  {loadingMore && (
+                    <div className="text-center py-8">
+                      <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-300 border-t-blue-600"></div>
+                      <p className="mt-2 text-gray-600">Ładowanie kolejnych hulajnóg...</p>
+                    </div>
+                  )}
+
+                  {/* Koniec listy */}
+                  {!hasMore && totalLoaded > 0 && (
+                    <div className="text-center py-8 text-gray-600">
+                      Koniec listy - załadowano wszystkie {totalLoaded.toLocaleString()} hulajnóg
                     </div>
                   )}
                 </div>
@@ -812,7 +777,6 @@ export default function AdminPanel() {
                       </div>
                     </div>
                     
-                    {/* Toggle Switch Component */}
                     <button
                       onClick={handleRedisToggle}
                       className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
@@ -836,4 +800,3 @@ export default function AdminPanel() {
     </div>
   );
 }
-

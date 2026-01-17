@@ -7,7 +7,7 @@ import { PutCommand } from "@aws-sdk/lib-dynamodb";
 
 // Współrzędne: Nowy Sącz (centrum)
 const CITY_CENTER = { lat: 49.6215, lon: 20.6969 };
-const CITY_RADIUS_KM = 2;
+const CITY_RADIUS_KM = 5;
 
 function generateRandomCoordinates() {
   const latOffset = (Math.random() - 0.5) * (CITY_RADIUS_KM / 111);
@@ -145,7 +145,7 @@ async function seedScootersData() {
   // Śledź liczniki dla każdego modelu
   const modelCounters = {};
 
-  for (let i = 1; i <= 50; i++) {
+  for (let i = 1; i <= 80000; i++) {
     const scooterId = uuidv4();
     const { lat, lon } = generateRandomCoordinates();
     const battery = Math.floor(Math.random() * 100) + 1; // 1-100%
