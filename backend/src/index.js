@@ -27,14 +27,12 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Sprawdź połączenia z bazami danych
+// Sprawdzenie połączenia z bazami danych
 async function checkConnections() {
-  console.log("\n🔍 Sprawdzanie połączeń...\n");
+  console.log("\nSprawdzanie połączeń...\n");
 
-  // Sprawdź DynamoDB
+  // Sprawdzenie DynamoDB
   await checkDynamoDBConnection();
-
-  // Redis jest już połączony w redis.js
 
   console.log("");
 }
@@ -49,23 +47,8 @@ app.listen(PORT, async () => {
   `);
 
   await checkConnections();
-
-  console.log(`
-     Aby zainicjalizować tabele DynamoDB:
-     POST http://localhost:${PORT}/api/init
-
-     Aby wygenerować przykładowe dane:
-     POST http://localhost:${PORT}/api/seed
-
-     Dostępne endpointy:
-     - POST /api/auth/register     - Rejestracja
-     - POST /api/auth/login        - Logowanie
-     - GET  /api/scooters          - Lista hulajnóg
-     - POST /api/reservations      - Utwórz rezerwację
-     - GET  /api/users/me          - Twój profil
-  `);
-
-  // Uruchom interwał do pobierania opłat co minutę
+  
+  // Interwał do pobierania opłat co minutę
   startRideChargingInterval();
 });
 
@@ -73,12 +56,10 @@ app.listen(PORT, async () => {
 // Interwał do pobierania opłat za aktywne jazdy (co minutę)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function startRideChargingInterval() {
-  // Pobierz opłaty natychmiast przy starcie
   chargeForActiveRides().catch((error) => {
     console.error('Błąd pobierania opłat przy starcie:', error);
   });
 
-  // Następnie pobieraj opłaty co minutę (60000 ms)
   setInterval(async () => {
     try {
       const result = await chargeForActiveRides();

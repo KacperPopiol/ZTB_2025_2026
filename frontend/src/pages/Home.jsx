@@ -34,7 +34,6 @@ export default function Home() {
     };
     loadUser();
 
-    // Załaduj statystyki
     const loadStats = async () => {
       try {
         const statsResponse = await getScooterStats();
@@ -46,7 +45,6 @@ export default function Home() {
     loadStats();
   }, []);
 
-  // Dla nie-adminów wymuś status="available" i sortBy=""
   useEffect(() => {
     if (!isAdmin()) {
       if (status !== "available") {
@@ -85,7 +83,7 @@ export default function Home() {
                     {isAdmin() && (
                       <>
                         <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                          👑 Admin
+                          Admin
                         </span>
                         <button
                           onClick={() => navigate("/admin")}
@@ -99,7 +97,7 @@ export default function Home() {
                   <p className="text-xs text-gray-600">{user.email}</p>
                   {user.walletBalance !== undefined && (
                     <p className="text-xs font-semibold text-green-600">
-                      💰 {(user.walletBalance || 0).toFixed(2)} zł
+                      {(user.walletBalance || 0).toFixed(2)} zł
                     </p>
                   )}
                 </div>
@@ -107,7 +105,7 @@ export default function Home() {
                   onClick={() => navigate("/profile")}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition"
                 >
-                  👤 Profil
+                  Profil
                 </button>
                 <button
                   onClick={handleLogout}
@@ -170,18 +168,15 @@ export default function Home() {
       {/* Active Reservation Panel */}
       <ActiveReservationPanel 
         onRideStarted={() => {
-          // Odśwież profil użytkownika po rozpoczęciu jazdy
           getMyProfile().then(response => setUser(response.user)).catch(console.error);
         }}
         onReservationCancelled={() => {
-          // Odśwież profil użytkownika po anulowaniu rezerwacji
           getMyProfile().then(response => setUser(response.user)).catch(console.error);
         }}
       />
 
       {/* Active Ride Panel */}
       <ActiveRidePanel onRideEnded={() => {
-        // Odśwież profil użytkownika po zakończeniu jazdy
         getMyProfile().then(response => setUser(response.user)).catch(console.error);
       }} />
     </div>

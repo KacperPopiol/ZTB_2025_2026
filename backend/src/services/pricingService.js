@@ -1,4 +1,4 @@
-import redis from '../redisWrapper.js'; // ← Zmiana importu
+import redis from '../redisWrapper.js';
 
 const PRICING_KEY = 'pricing:config';
 const DEFAULT_PRICING = {
@@ -12,15 +12,14 @@ const DEFAULT_PRICING = {
 let localPricingCache = null;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Pobierz aktualne ceny
+// Pobranie aktualnych cen
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function getPricing() {
   try {
-    // Próbuj z Redis
     const cached = await redis.get(PRICING_KEY);
     if (cached) {
       const pricing = JSON.parse(cached);
-      localPricingCache = pricing; // Aktualizuj lokalny cache
+      localPricingCache = pricing;
       return pricing;
     }
 
@@ -34,13 +33,13 @@ export async function getPricing() {
     return DEFAULT_PRICING;
   } catch (error) {
     console.error('Błąd pobierania cen:', error);
-    // Fallback na lokalny cache lub domyślne
+
     return localPricingCache || DEFAULT_PRICING;
   }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Ustaw ceny (tylko admin)
+// Ustawnienie cen (tylko admin)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function setPricing(pricing) {
   try {
@@ -49,10 +48,9 @@ export async function setPricing(pricing) {
       updatedAt: new Date().toISOString(),
     };
 
-    // Zapisz w Redis (jeśli włączony)
+    // Zapisanie w Redis (jeśli włączony)
     await redis.set(PRICING_KEY, JSON.stringify(updatedPricing));
     
-    // Zawsze aktualizuj lokalny cache
     localPricingCache = updatedPricing;
 
     return updatedPricing;
@@ -63,7 +61,7 @@ export async function setPricing(pricing) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Pobierz opłatę aktywacyjną (za rozpoczęcie jazdy)
+// Pobranie opłaty aktywacyjnej (za rozpoczęcie jazdy)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function getActivationFee() {
   const pricing = await getPricing();
@@ -71,7 +69,7 @@ export async function getActivationFee() {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Pobierz cenę za minutę jazdy
+// Pobranie ceny za minutę jazdy
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function getRidePerMinutePrice() {
   const pricing = await getPricing();
@@ -79,7 +77,7 @@ export async function getRidePerMinutePrice() {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Oblicz cenę jazdy na podstawie czasu (w minutach)
+// Obliczenie ceny jazdy na podstawie czasu (w minutach)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function calculateRidePrice(minutes) {
   const pricing = await getPricing();

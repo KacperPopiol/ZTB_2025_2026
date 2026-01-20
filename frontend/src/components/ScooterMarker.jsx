@@ -3,7 +3,6 @@ import { Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import { createReservation, getPricing } from "../services/api";
 
-// Custom marker icon
 const createMarkerIcon = (color) => {
   return L.divIcon({
     className: `scooter-marker ${color}`,
@@ -40,14 +39,12 @@ export default function ScooterMarker({ scooter, onReserved }) {
       setShowConfirm(false);
       setLoading(false);
       onReserved?.();
-      // Zamknij popup po rezerwacji
       setTimeout(() => {
         map.closePopup();
       }, 500);
     } catch (err) {
       setError(err.response?.data?.error || "Błąd rezerwacji");
       setLoading(false);
-      // Zamknij popup po błędzie
       setTimeout(() => {
         map.closePopup();
       }, 2000);
@@ -64,15 +61,15 @@ export default function ScooterMarker({ scooter, onReserved }) {
   const getStatusInfo = () => {
     const status = scooter.status;
     if (status === "reserved") {
-      return { color: "reserved", text: "🔴 Zarezerwowana", textColor: "text-red-600", canReserve: false };
+      return { color: "reserved", text: "Zarezerwowana", textColor: "text-red-600", canReserve: false };
     }
     if (status === "maintenance") {
-      return { color: "maintenance", text: "🔧 W naprawie", textColor: "text-gray-600", canReserve: false };
+      return { color: "maintenance", text: "W naprawie", textColor: "text-gray-600", canReserve: false };
     }
     if (status === "in_use") {
-      return { color: "in-use", text: "🔵 W użyciu", textColor: "text-blue-600", canReserve: false };
+      return { color: "in-use", text: "W użyciu", textColor: "text-blue-600", canReserve: false };
     }
-    return { color: "available", text: "🟢 Dostępna", textColor: "text-green-600", canReserve: true };
+    return { color: "available", text: "Dostępna", textColor: "text-green-600", canReserve: true };
   };
 
   const statusInfo = getStatusInfo();
@@ -91,7 +88,7 @@ export default function ScooterMarker({ scooter, onReserved }) {
             <div className="flex justify-between">
               <span className="text-gray-600">Bateria:</span>
               <span className={`font-semibold ${getBatteryColor()}`}>
-                🔋 {scooter.battery}%
+                {scooter.battery}%
               </span>
             </div>
 
@@ -133,7 +130,7 @@ export default function ScooterMarker({ scooter, onReserved }) {
               className="w-full py-2 px-3 bg-blue-600 text-white rounded-lg font-medium text-sm
                 hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              📍 Zarezerwuj na 5 min
+              Zarezerwuj na 5 min
             </button>
           )}
 
@@ -154,7 +151,7 @@ export default function ScooterMarker({ scooter, onReserved }) {
                   className="flex-1 py-2 px-3 bg-blue-600 text-white rounded-lg font-medium text-sm
                     hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {loading ? "⏳ Rezerwowanie..." : "✅ Potwierdź"}
+                  {loading ? "Rezerwowanie..." : "Potwierdź"}
                 </button>
                 <button
                   onClick={() => {
@@ -174,8 +171,8 @@ export default function ScooterMarker({ scooter, onReserved }) {
           {!statusInfo.canReserve && (
             <div className="text-center py-2 text-sm text-gray-600">
               {scooter.status === "reserved" && "Ta hulajnoga jest już zarezerwowana"}
-              {scooter.status === "maintenance" && "🔧 Ta hulajnoga jest w naprawie i nie jest dostępna"}
-              {scooter.status === "in_use" && "🔵 Ta hulajnoga jest obecnie w użyciu"}
+              {scooter.status === "maintenance" && "Ta hulajnoga jest w naprawie i nie jest dostępna"}
+              {scooter.status === "in_use" && "Ta hulajnoga jest obecnie w użyciu"}
             </div>
           )}
         </div>

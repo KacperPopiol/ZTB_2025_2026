@@ -2,7 +2,6 @@ import React, { useEffect } from "react";
 import { MapContainer, TileLayer, useMapEvents, Marker } from "react-leaflet";
 import L from "leaflet";
 
-// Fix dla ikon Leaflet w React
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
@@ -18,7 +17,6 @@ function LocationMarker({ position, setPosition, onLocationChange }) {
     click(e) {
       const newPosition = [e.latlng.lat, e.latlng.lng];
       setPosition(newPosition);
-      // Wywołaj callback tylko gdy użytkownik kliknie, nie w useEffect
       if (onLocationChange) {
         onLocationChange(newPosition[0], newPosition[1]);
       }
@@ -36,7 +34,6 @@ export default function LocationPicker({ latitude, longitude, onLocationChange, 
   useEffect(() => {
     if (latitude && longitude) {
       const newPosition = [parseFloat(latitude), parseFloat(longitude)];
-      // Aktualizuj pozycję tylko jeśli się zmieniła (aby uniknąć niepotrzebnych aktualizacji)
       setPosition(prev => {
         if (!prev || prev[0] !== newPosition[0] || prev[1] !== newPosition[1]) {
           return newPosition;
@@ -48,7 +45,7 @@ export default function LocationPicker({ latitude, longitude, onLocationChange, 
     }
   }, [latitude, longitude]);
 
-  const defaultCenter = position || [49.6215, 20.6969]; // Nowy Sącz jako domyślne
+  const defaultCenter = position || [49.6215, 20.6969];
 
   return (
     <div className="border border-gray-300 rounded-lg overflow-hidden" style={{ height }}>
@@ -65,7 +62,7 @@ export default function LocationPicker({ latitude, longitude, onLocationChange, 
         <LocationMarker position={position} setPosition={setPosition} onLocationChange={onLocationChange} />
       </MapContainer>
       <div className="bg-blue-50 border-t border-blue-200 p-2 text-sm text-blue-700">
-        📍 Kliknij na mapę, aby ustawić lokalizację
+        Kliknij na mapę, aby ustawić lokalizację
       </div>
     </div>
   );

@@ -15,7 +15,7 @@ const router = express.Router();
 // USER ROUTES
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-// POST /api/reservations - Utwórz rezerwację
+// POST /api/reservations - Utworzenie rezerwacji
 router.post('/', authenticateToken, requireUser, async (req, res) => {
   try {
     const { scooterId } = req.body;
@@ -48,7 +48,7 @@ router.post('/', authenticateToken, requireUser, async (req, res) => {
   }
 });
 
-// GET /api/reservations/me - Pobierz aktywną rezerwację użytkownika
+// GET /api/reservations/me - Pobranie aktywnej rezerwacji użytkownika
 router.get('/me', authenticateToken, requireUser, async (req, res) => {
   try {
     const reservation = await getActiveReservationByUser(req.user.userId);
@@ -89,7 +89,7 @@ router.get('/history', authenticateToken, requireUser, async (req, res) => {
   }
 });
 
-// GET /api/reservations/:reservationId - Pobierz szczegóły rezerwacji
+// GET /api/reservations/:reservationId - Pobranie szczegółów rezerwacji
 router.get('/:reservationId', authenticateToken, requireUser, async (req, res) => {
   try {
     const { reservationId } = req.params;
@@ -99,7 +99,7 @@ router.get('/:reservationId', authenticateToken, requireUser, async (req, res) =
       return res.status(404).json({ error: 'Rezerwacja nie znaleziona' });
     }
 
-    // Sprawdź czy użytkownik jest właścicielem (lub adminem)
+    // Sprawdzenie czy użytkownik jest właścicielem lub adminem
     if (reservation.userId !== req.user.userId && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Brak dostępu do tej rezerwacji' });
     }
@@ -114,7 +114,7 @@ router.get('/:reservationId', authenticateToken, requireUser, async (req, res) =
   }
 });
 
-// DELETE /api/reservations/:reservationId - Anuluj rezerwację
+// DELETE /api/reservations/:reservationId - Anulowanie rezerwacji
 router.delete('/:reservationId', authenticateToken, requireUser, async (req, res) => {
   try {
     const { reservationId } = req.params;
@@ -140,7 +140,7 @@ router.delete('/:reservationId', authenticateToken, requireUser, async (req, res
   }
 });
 
-// POST /api/reservations/:reservationId/start - Rozpocznij jazdę
+// POST /api/reservations/:reservationId/start - Rozpoczęcie jazdy
 router.post('/:reservationId/start', authenticateToken, requireUser, async (req, res) => {
   try {
     const { reservationId } = req.params;

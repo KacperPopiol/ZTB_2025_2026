@@ -22,7 +22,7 @@ const router = express.Router();
 // PUBLIC / USER ROUTES
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-// GET /api/scooters - Pobierz hulajnogi w promieniu (opcjonalna autentykacja)
+// GET /api/scooters - Pobranie hulajnog w promieniu (opcjonalna autentykacja)
 router.get('/', optionalAuth, async (req, res) => {
   try {
     const { lat, lon, radius, minBattery, status, model, sortBy } = req.query;
@@ -33,6 +33,7 @@ router.get('/', optionalAuth, async (req, res) => {
       const longitude = parseFloat(lon);
       const radiusMeters = parseInt(radius) || 500;
       const minBatt = parseInt(minBattery) || 0;
+      
       // Jeśli status jest pustym stringiem, oznacza "wszystkie" - przekaż null
       const statusFilter = status === '' ? null : (status || 'available');
       const modelFilter = model || null;
@@ -89,7 +90,7 @@ router.get('/', optionalAuth, async (req, res) => {
 });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// NOWY ENDPOINT: GET /api/scooters/all - Pobierz wszystkie hulajnogi Z PAGINACJĄ
+// GET /api/scooters/all - Pobranie wszystkich hulajnog z paginacją
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 router.get('/all', authenticateToken, requireAdmin, async (req, res) => {
   try {
@@ -117,7 +118,7 @@ router.get('/all', authenticateToken, requireAdmin, async (req, res) => {
 });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// NOWY ENDPOINT: POST /api/scooters/bounds - Pobierz hulajnogi w granicach mapy
+// POST /api/scooters/bounds - Pobranie hulajnog w granicach mapy
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 router.post('/bounds', async (req, res) => {
   try {
@@ -161,7 +162,7 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-// GET /api/scooters/models - Pobierz listę dostępnych modeli
+// GET /api/scooters/models - Pobranie listy dostępnych modeli
 router.get('/models', async (req, res) => {
   try {
     const models = await getAvailableModels();
@@ -176,7 +177,7 @@ router.get('/models', async (req, res) => {
   }
 });
 
-// GET /api/scooters/:scooterId - Pobierz szczegóły hulajnogi
+// GET /api/scooters/:scooterId - Pobranie szczegółów hulajnogi
 router.get('/:scooterId', async (req, res) => {
   try {
     const { scooterId } = req.params;
@@ -186,7 +187,7 @@ router.get('/:scooterId', async (req, res) => {
       return res.status(404).json({ error: 'Hulajnoga nie znaleziona' });
     }
 
-    // Sprawdź czy zarezerwowana
+    // Sprawdzenie czy zarezerwowana
     const reserved = await isScooterReserved(scooterId);
 
     res.json({
@@ -206,7 +207,7 @@ router.get('/:scooterId', async (req, res) => {
 // ADMIN ROUTES
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-// POST /api/scooters - Utwórz nową hulajnogę (tylko admin)
+// POST /api/scooters - Utworzenie nowej hulajnogi (tylko admin)
 router.post('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { model, latitude, longitude, battery, identifier } = req.body;
@@ -254,7 +255,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-// GET /api/scooters/status/:status - Pobierz hulajnogi po statusie (tylko admin)
+// GET /api/scooters/status/:status - Pobranie hulajnog po statusie (tylko admin)
 router.get('/status/:status', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { status } = req.params;
@@ -281,7 +282,7 @@ router.get('/status/:status', authenticateToken, requireAdmin, async (req, res) 
   }
 });
 
-// PUT /api/scooters/:scooterId - Aktualizuj hulajnogę (tylko admin)
+// PUT /api/scooters/:scooterId - Aktualizacja hulajnogi (tylko admin)
 router.put('/:scooterId', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { scooterId } = req.params;
@@ -333,7 +334,7 @@ router.put('/:scooterId', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-// PATCH /api/scooters/:scooterId/status - Zmień status hulajnogi (tylko admin)
+// PATCH /api/scooters/:scooterId/status - Zmiana statusu hulajnogi (tylko admin)
 router.patch('/:scooterId/status', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { scooterId } = req.params;
@@ -361,7 +362,7 @@ router.patch('/:scooterId/status', authenticateToken, requireAdmin, async (req, 
   }
 });
 
-// PATCH /api/scooters/:scooterId/battery - Aktualizuj poziom baterii (tylko admin)
+// PATCH /api/scooters/:scooterId/battery - Aktualizacja poziomu baterii (tylko admin)
 router.patch('/:scooterId/battery', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { scooterId } = req.params;
@@ -390,7 +391,7 @@ router.patch('/:scooterId/battery', authenticateToken, requireAdmin, async (req,
   }
 });
 
-// DELETE /api/scooters/:scooterId - Usuń hulajnogę (tylko admin)
+// DELETE /api/scooters/:scooterId - Usunięcie hulajnogi (tylko admin)
 router.delete('/:scooterId', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { scooterId } = req.params;

@@ -12,7 +12,6 @@ export default function ActiveRidePanel({ onRideEnded }) {
     loadRide();
     loadPricing();
     
-    // Odświeżaj co 5 sekund
     const interval = setInterval(() => {
       loadRide();
     }, 5000);
@@ -22,14 +21,12 @@ export default function ActiveRidePanel({ onRideEnded }) {
 
   useEffect(() => {
     if (ride && pricing) {
-      // Oblicz czas trwania jazdy
       const startTime = new Date(ride.startedAt);
       const now = new Date();
       const diffMs = now - startTime;
       const diffMinutes = Math.ceil(diffMs / (1000 * 60));
       setDuration(diffMinutes);
 
-      // Oblicz szacowany koszt (już pobrane + pozostałe minuty)
       const alreadyCharged = ride.totalCharged || 0;
       const remainingMinutes = diffMinutes - (ride.lastChargedMinutes || 0);
       const remainingCost = remainingMinutes * pricing.ridePerMinute;
@@ -84,7 +81,7 @@ export default function ActiveRidePanel({ onRideEnded }) {
   return (
     <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 bg-white rounded-lg shadow-2xl border-2 border-blue-500 p-6 max-w-md w-full mx-4">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xl font-bold text-blue-600">🚴 Aktywna jazda</h3>
+        <h3 className="text-xl font-bold text-blue-600">Aktywna jazda</h3>
         <button
           onClick={handleEndRide}
           disabled={loading}
@@ -128,7 +125,7 @@ export default function ActiveRidePanel({ onRideEnded }) {
         </div>
 
         <div className="text-xs text-gray-500 mt-2 pt-2 border-t">
-          💡 Opłata jest pobierana automatycznie co minutę. Jazda zakończy się automatycznie, gdy skończą się środki.
+          Opłata jest pobierana automatycznie co minutę. Jazda zakończy się automatycznie, gdy skończą się środki.
         </div>
       </div>
     </div>

@@ -9,7 +9,7 @@ import { deductFromWallet } from './userService.js';
 const RESERVATION_TTL = 300;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Sprawdź czy hulajnoga jest zarezerwowana (z DynamoDB jako fallback)
+// Sprawdzenie czy hulajnoga jest zarezerwowana (z DynamoDB jako fallback)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 async function isScooterReservedInDB(scooterId) {
   try {
@@ -22,7 +22,7 @@ async function isScooterReservedInDB(scooterId) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Utwórz rezerwację
+// Utworzenie rezerwacji
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function createReservation(userId, scooterId) {
   try {
@@ -41,11 +41,9 @@ export async function createReservation(userId, scooterId) {
       throw new Error('Masz już aktywną rezerwację');
     }
 
-    // Sprawdź czy hulajnoga nie jest już zarezerwowana
     const redisKey = `reservation:scooter:${scooterId}`;
     const existsInRedis = await redis.exists(redisKey);
     
-    // Jeśli Redis wyłączony, sprawdź w DynamoDB
     if (!redis.isEnabled()) {
       const isReservedInDB = await isScooterReservedInDB(scooterId);
       if (isReservedInDB) {
@@ -76,7 +74,6 @@ export async function createReservation(userId, scooterId) {
 
     await docClient.send(command);
 
-    // Zapisz w Redis z TTL (jeśli włączony)
     await redis.set(redisKey, userId, 'EX', RESERVATION_TTL);
     await redis.set(`reservation:user:${userId}`, reservationId, 'EX', RESERVATION_TTL);
 
@@ -94,7 +91,7 @@ export async function createReservation(userId, scooterId) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Pobierz rezerwację po ID
+// Pobranie rezerwacji po ID
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function getReservationById(reservationId) {
   try {
@@ -117,17 +114,15 @@ export async function getReservationById(reservationId) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Pobierz aktywną rezerwację użytkownika
+// Pobranie aktywnej rezerwacji użytkownika
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function getActiveReservationByUser(userId) {
   try {
-    // Sprawdź Redis
     const reservationId = await redis.get(`reservation:user:${userId}`);
     if (reservationId) {
       return await getReservationById(reservationId);
     }
 
-    // Sprawdź DynamoDB (zawsze jako fallback)
     const command = new QueryCommand({
       TableName: TABLES.RESERVATIONS,
       IndexName: 'UserIndex',
@@ -157,7 +152,7 @@ export async function getActiveReservationByUser(userId) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Pobierz wszystkie rezerwacje użytkownika
+// Pobranie wszystkich rezerwacji użytkownika
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function getUserReservations(userId, limit = 20) {
   try {
@@ -185,7 +180,7 @@ export async function getUserReservations(userId, limit = 20) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Anuluj rezerwację
+// Anulowanie rezerwacji
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function cancelReservation(reservationId, userId) {
   try {
@@ -220,7 +215,6 @@ export async function cancelReservation(reservationId, userId) {
 
     await docClient.send(command);
 
-    // Usuń z Redis
     await redis.del(`reservation:scooter:${reservation.scooterId}`);
     await redis.del(`reservation:user:${userId}`);
 
@@ -234,7 +228,7 @@ export async function cancelReservation(reservationId, userId) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Rozpocznij jazdę (konwertuj rezerwację na jazdę)
+// Rozpoczęcie jazdy (konwersja rezerwacji na jazdę)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function startRide(reservationId, userId) {
   try {
@@ -294,11 +288,9 @@ export async function startRide(reservationId, userId) {
 
     await docClient.send(createRideCommand);
 
-    // Usuń z Redis
     await redis.del(`reservation:scooter:${reservation.scooterId}`);
     await redis.del(`reservation:user:${userId}`);
 
-    // Zapisz aktywną jazdę w Redis
     await redis.set(`ride:user:${userId}`, rideId);
     await redis.set(`ride:scooter:${reservation.scooterId}`, rideId);
 
@@ -312,15 +304,13 @@ export async function startRide(reservationId, userId) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Sprawdź czy hulajnoga jest zarezerwowana
+// Sprwadzenie czy hulajnoga jest zarezerwowana
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function isScooterReserved(scooterId) {
   try {
-    // Sprawdź Redis
     const exists = await redis.exists(`reservation:scooter:${scooterId}`);
     if (exists === 1) return true;
     
-    // Jeśli Redis wyłączony, sprawdź w DynamoDB
     if (!redis.isEnabled()) {
       return await isScooterReservedInDB(scooterId);
     }
@@ -333,7 +323,7 @@ export async function isScooterReserved(scooterId) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Wygaś przeterminowane rezerwacje (cronjob)
+// Wygaszenie przeterminowanych rezerwacji (cronjob)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function expireOldReservations() {
   try {

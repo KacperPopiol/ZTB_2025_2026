@@ -47,11 +47,10 @@ export async function createUser({ email, password, firstName, lastName, role = 
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Pobierz użytkownika po ID
+// Pobranie użytkownika po ID
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function getUserById(userId) {
   try {
-    // Sprawdź cache (wrapper zwróci null jeśli Redis wyłączony)
     const cached = await redis.get(`user:${userId}`);
     if (cached) {
       return JSON.parse(cached);
@@ -70,7 +69,6 @@ export async function getUserById(userId) {
 
     const { password, ...userWithoutPassword } = response.Item;
 
-    // Zapisz w cache na 5 minut (wrapper zignoruje jeśli Redis wyłączony)
     await redis.setex(`user:${userId}`, 300, JSON.stringify(userWithoutPassword));
 
     return userWithoutPassword;
@@ -81,7 +79,7 @@ export async function getUserById(userId) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Pobierz użytkownika po email
+// Pobranie użytkownika po email
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function getUserByEmail(email) {
   try {
@@ -151,7 +149,6 @@ export async function updateUser(userId, updates) {
 
     const response = await docClient.send(command);
 
-    // Usuń cache
     await redis.del(`user:${userId}`);
 
     const { password, ...userWithoutPassword } = response.Attributes;
@@ -201,7 +198,6 @@ export async function changePassword(userId, oldPassword, newPassword) {
 
     await docClient.send(updateCommand);
 
-    // Usuń cache
     await redis.del(`user:${userId}`);
 
     return { success: true };
@@ -212,7 +208,7 @@ export async function changePassword(userId, oldPassword, newPassword) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Usuń użytkownika
+// Usunięcie użytkownika
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function deleteUser(userId) {
   try {
@@ -223,7 +219,6 @@ export async function deleteUser(userId) {
 
     await docClient.send(command);
 
-    // Usuń cache
     await redis.del(`user:${userId}`);
 
     return { success: true };
@@ -234,7 +229,7 @@ export async function deleteUser(userId) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Pobierz wszystkich użytkowników (dla admina)
+// Pobranie wszystkich użytkowników (dla admina)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function getAllUsers(limit = 50) {
   try {

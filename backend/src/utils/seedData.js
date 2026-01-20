@@ -5,7 +5,7 @@ import docClient, { TABLES } from "../dynamodb.js";
 import redis from "../redis.js";
 import { PutCommand } from "@aws-sdk/lib-dynamodb";
 
-// Współrzędne: Nowy Sącz (centrum)
+// Współrzędne: Nowy Sącz
 const CITY_CENTER = { lat: 49.6215, lon: 20.6969 };
 const CITY_RADIUS_KM = 5;
 
@@ -47,7 +47,7 @@ async function seedUsers() {
   });
 
   await docClient.send(adminCommand);
-  console.log("✅ Administrator utworzony: admin@ecoscoot.pl / password123");
+  console.log("Administrator utworzony: admin@ecoscoot.pl / password123");
 
   // Przykładowi użytkownicy
   const users = [
@@ -95,25 +95,22 @@ async function seedUsers() {
   }
 
   console.log(
-    `✅ ${users.length} użytkowników utworzonych (hasło dla wszystkich: password123)`,
+    `${users.length} użytkowników utworzonych (hasło dla wszystkich: password123)`,
   );
 
   return { admin, users };
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Generuj skrót modelu dla identyfikatora
+// Generowanie skrótu modelu dla identyfikatora
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function generateModelPrefix(model) {
   if (!model) return 'SC';
   
-  // Usuń spacje i znaki specjalne, weź pierwsze litery słów
   const words = model.toUpperCase().split(/\s+/);
   if (words.length === 1) {
-    // Jeśli jedno słowo, weź pierwsze 3-4 litery
     return words[0].substring(0, 4).replace(/[^A-Z0-9]/g, '');
   } else {
-    // Jeśli wiele słów, weź pierwsze litery każdego słowa
     return words.map(w => w[0]).join('').substring(0, 4).replace(/[^A-Z0-9]/g, '');
   }
 }
@@ -122,9 +119,8 @@ function generateModelPrefix(model) {
 // Seedowanie hulajnóg
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 async function seedScootersData() {
-  console.log("🛴 Tworzenie hulajnóg...");
+  console.log("Tworzenie hulajnóg...");
 
-  // Wyczyść Redis GEO
   await redis.del("scooters:locations");
 
   const models = [
@@ -142,7 +138,6 @@ async function seedScootersData() {
   ];
   const scooters = [];
   
-  // Śledź liczniki dla każdego modelu
   const modelCounters = {};
 
   for (let i = 1; i <= 80000; i++) {
@@ -153,7 +148,6 @@ async function seedScootersData() {
     const status = statuses[Math.floor(Math.random() * statuses.length)];
     const now = new Date().toISOString();
     
-    // Generuj unikalny identyfikator
     const prefix = generateModelPrefix(model);
     if (!modelCounters[model]) {
       modelCounters[model] = 0;
@@ -175,7 +169,6 @@ async function seedScootersData() {
       totalDistance: Math.floor(Math.random() * 1000),
     };
 
-    // Zapisz w DynamoDB
     const command = new PutCommand({
       TableName: TABLES.SCOOTERS,
       Item: scooter,
@@ -183,13 +176,12 @@ async function seedScootersData() {
 
     await docClient.send(command);
 
-    // Dodaj do Redis GEO dla szybkiego wyszukiwania geograficznego
     await redis.geoadd("scooters:locations", lon, lat, scooterId);
 
     scooters.push(scooter);
   }
 
-  console.log(`✅ ${scooters.length} hulajnóg utworzonych`);
+  console.log(`${scooters.length} hulajnóg utworzonych`);
   return scooters;
 }
 
@@ -198,9 +190,8 @@ async function seedScootersData() {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function seedScooters() {
   try {
-    console.log("\n🌱 Rozpoczynam seedowanie danych...\n");
+    console.log("\nRozpoczynam seedowanie danych...\n");
 
-    // Wyczyść cache Redis
     const keys = await redis.keys("scooter:*");
     if (keys.length > 0) {
       await redis.del(...keys);
@@ -208,16 +199,14 @@ export async function seedScooters() {
     await redis.del("scooters:all:*");
     await redis.del("scooters:stats");
 
-    // Seeduj użytkowników
     await seedUsers();
 
     console.log("");
 
-    // Seeduj hulajnogi
     await seedScootersData();
 
-    console.log("\n✅ Seedowanie zakończone pomyślnie!\n");
-    console.log("📝 Dane logowania:");
+    console.log("\nSeedowanie zakończone pomyślnie!\n");
+    console.log("   Dane logowania:");
     console.log("   Admin: admin@ecoscoot.pl / password123");
     console.log("   User1: jan.kowalski@example.com / password123");
     console.log("   User2: anna.nowak@example.com / password123");
@@ -225,13 +214,13 @@ export async function seedScooters() {
 
     return true;
   } catch (error) {
-    console.error("❌ Błąd seedowania:", error);
+    console.error("Błąd seedowania:", error);
     throw error;
   }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Funkcja pomocnicza do wyszukiwania hulajnóg w pobliżu (używana w testach)
+// Funkcja pomocnicza do wyszukiwania hulajnóg w pobliżu
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function getScootersNearby(lat, lon, distance = 500) {
   try {
@@ -248,7 +237,7 @@ export async function getScootersNearby(lat, lon, distance = 500) {
 
     return result;
   } catch (error) {
-    console.error("❌ Błąd wyszukiwania hulajnóg:", error);
+    console.error("Błąd wyszukiwania hulajnóg:", error);
     return [];
   }
 }

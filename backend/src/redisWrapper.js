@@ -1,10 +1,10 @@
 import redis from './redis.js';
 import { systemState } from './utils/systemState.js';
 
-/**
- * Wrapper dla Redis, który sprawdza czy Redis jest włączony
- * Jeśli wyłączony - operacje cache są pomijane
- */
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Wrapper dla Redis, który sprawdza czy Redis jest włączony
+// Jeśli wyłączony - operacje cache są pomijane
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const redisWrapper = {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // Podstawowe operacje cache
@@ -112,7 +112,7 @@ const redisWrapper = {
     return systemState.redisEnabled;
   },
 
-  // Bezpośredni dostęp do oryginalnego klienta (dla specjalnych przypadków)
+  // Bezpośredni dostęp do oryginalnego klienta
   getClient() {
     return redis;
   }

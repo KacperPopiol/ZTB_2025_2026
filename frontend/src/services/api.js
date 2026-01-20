@@ -132,7 +132,6 @@ export const getScooters = async (
   return response.data;
 };
 
-// NOWA FUNKCJA: Pobierz hulajnogi w granicach mapy
 export const getScootersInBounds = async (bounds, limit = 500, status = null) => {
   const response = await api.post("/scooters/bounds", { bounds, limit, status });
   return response.data;
@@ -153,7 +152,6 @@ export const getScooterStats = async () => {
   return response.data;
 };
 
-// ZMODYFIKOWANA FUNKCJA: Dodano paginację z lastEvaluatedKey
 export const getAllScooters = async (limit = 100, lastEvaluatedKey = null) => {
   const params = { limit };
   if (lastEvaluatedKey) {

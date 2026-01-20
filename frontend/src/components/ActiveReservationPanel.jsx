@@ -12,7 +12,6 @@ export default function ActiveReservationPanel({ onRideStarted, onReservationCan
     loadReservation();
     loadPricing();
     
-    // Odświeżaj co sekundę
     const interval = setInterval(() => {
       loadReservation();
     }, 1000);
@@ -55,7 +54,6 @@ export default function ActiveReservationPanel({ onRideStarted, onReservationCan
   useEffect(() => {
     if (reservation) {
       calculateTimeLeft();
-      // Odświeżaj czas co sekundę
       const timeInterval = setInterval(() => {
         calculateTimeLeft();
       }, 1000);
@@ -76,9 +74,9 @@ export default function ActiveReservationPanel({ onRideStarted, onReservationCan
     } catch (error) {
       const errorMessage = error.response?.data?.error || "Błąd rozpoczynania jazdy";
       if (errorMessage.includes("Niewystarczające środki")) {
-        alert(`❌ ${errorMessage}\n\nDoładuj portfel w profilu, aby rozpocząć jazdę.`);
+        alert(`${errorMessage}\n\nDoładuj portfel w profilu, aby rozpocząć jazdę.`);
       } else {
-        alert(`❌ ${errorMessage}`);
+        alert(`${errorMessage}`);
       }
     } finally {
       setLoading(false);
@@ -112,7 +110,7 @@ export default function ActiveReservationPanel({ onRideStarted, onReservationCan
   return (
     <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-50 bg-white rounded-lg shadow-2xl border-2 border-yellow-500 p-6 max-w-md w-full mx-4">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xl font-bold text-yellow-600">⏰ Aktywna rezerwacja</h3>
+        <h3 className="text-xl font-bold text-yellow-600">Aktywna rezerwacja</h3>
         <div className="text-right">
           <div className="text-sm text-gray-600">Pozostało:</div>
           <div className="text-2xl font-bold text-yellow-600">
@@ -146,14 +144,14 @@ export default function ActiveReservationPanel({ onRideStarted, onReservationCan
           disabled={loading || cancelling || timeLeft === 0}
           className="flex-1 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? "⏳ Rozpoczynanie..." : "🚴 Rozpocznij jazdę"}
+          {loading ? "Rozpoczynanie..." : "Rozpocznij jazdę"}
         </button>
         <button
           onClick={handleCancelReservation}
           disabled={loading || cancelling}
           className="px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {cancelling ? "⏳..." : "❌"}
+          {cancelling ? "..." : "❌"}
         </button>
       </div>
 

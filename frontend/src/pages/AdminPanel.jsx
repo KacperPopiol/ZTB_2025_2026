@@ -19,7 +19,6 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
 
-  // Scooters z infinite scroll
   const [scooters, setScooters] = useState([]);
   const [lastEvaluatedKey, setLastEvaluatedKey] = useState(null);
   const [hasMore, setHasMore] = useState(true);
@@ -36,24 +35,20 @@ export default function AdminPanel() {
     status: "available",
   });
   
-  // Paginacja i wyszukiwanie
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Pricing
   const [pricing, setPricing] = useState({
     activationFee: 2.0,
     ridePerMinute: 0.5,
     minimumRidePrice: 5.0,
   });
 
-  // Stan dla Redisa
   const [redisEnabled, setRedisEnabled] = useState(true);
 
-  // Ref dla infinite scroll observer
   const observer = useRef();
   const lastScooterRef = useCallback(
     (node) => {
-      if (loadingMore || searchQuery.trim()) return; // Don't observe when searching
+      if (loadingMore || searchQuery.trim()) return;
       if (observer.current) observer.current.disconnect();
 
       observer.current = new IntersectionObserver((entries) => {
@@ -73,7 +68,6 @@ export default function AdminPanel() {
     loadSystemConfig();
   }, []);
 
-  // Callback dla LocationPicker
   const handleLocationChange = useCallback((lat, lng) => {
     setScooterForm(prev => ({
       ...prev,
@@ -82,7 +76,6 @@ export default function AdminPanel() {
     }));
   }, []);
 
-  // Filtruj hulajnogi na podstawie wyszukiwania
   const filteredScooters = scooters.filter((scooter) => {
     if (!searchQuery.trim()) return true;
     
@@ -119,13 +112,12 @@ export default function AdminPanel() {
   };
 
   const loadMoreScooters = async () => {
-    if (loadingMore || !hasMore || searchQuery.trim()) return; // Don't load more when searching
+    if (loadingMore || !hasMore || searchQuery.trim()) return;
 
     setLoadingMore(true);
     try {
       const response = await getAllScooters(100, lastEvaluatedKey);
       
-      // Deduplicate scooters by scooterId
       setScooters(prev => {
         const existingIds = new Set(prev.map(s => s.scooterId));
         const newScooters = (response.scooters || []).filter(

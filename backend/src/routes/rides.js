@@ -13,7 +13,7 @@ const router = express.Router();
 // USER ROUTES
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-// GET /api/rides/me - Pobierz aktywną jazdę użytkownika
+// GET /api/rides/me - Pobranie aktywnej jazdy użytkownika
 router.get('/me', authenticateToken, requireUser, async (req, res) => {
   try {
     const ride = await getActiveRideByUser(req.user.userId);
@@ -54,7 +54,7 @@ router.get('/history', authenticateToken, requireUser, async (req, res) => {
   }
 });
 
-// GET /api/rides/:rideId - Pobierz szczegóły jazdy
+// GET /api/rides/:rideId - Pobranie szczegółów jazdy
 router.get('/:rideId', authenticateToken, requireUser, async (req, res) => {
   try {
     const { rideId } = req.params;
@@ -64,7 +64,7 @@ router.get('/:rideId', authenticateToken, requireUser, async (req, res) => {
       return res.status(404).json({ error: 'Jazda nie znaleziona' });
     }
 
-    // Sprawdź czy użytkownik jest właścicielem (lub adminem)
+    // Sprawdzenie czy użytkownik jest właścicielem (lub adminem)
     if (ride.userId !== req.user.userId && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Brak dostępu do tej jazdy' });
     }
@@ -79,7 +79,7 @@ router.get('/:rideId', authenticateToken, requireUser, async (req, res) => {
   }
 });
 
-// POST /api/rides/:rideId/end - Zakończ jazdę
+// POST /api/rides/:rideId/end - Zakończenie jazdy
 router.post('/:rideId/end', authenticateToken, requireUser, async (req, res) => {
   try {
     const { rideId } = req.params;

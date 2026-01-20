@@ -5,7 +5,7 @@ import { getPricing, setPricing } from '../services/pricingService.js';
 const router = express.Router();
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// GET /api/pricing - Pobierz aktualne ceny (publiczne)
+// GET /api/pricing - Pobranie aktualnych cen (publiczne)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 router.get('/', async (req, res) => {
   try {
@@ -21,7 +21,7 @@ router.get('/', async (req, res) => {
 });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// PUT /api/pricing - Aktualizuj ceny (tylko admin)
+// PUT /api/pricing - Aktualizacja cen (tylko admin)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 router.put('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
@@ -58,10 +58,10 @@ router.put('/', authenticateToken, requireAdmin, async (req, res) => {
       });
     }
 
-    // Pobierz aktualne ceny
+    // Pobranie aktualnych cen
     const currentPricing = await getPricing();
 
-    // Zaktualizuj tylko podane pola
+    // Aktualizacja tylko podanych pól
     const updatedPricing = {
       activationFee:
         fee !== undefined

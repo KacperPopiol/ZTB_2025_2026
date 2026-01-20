@@ -28,7 +28,6 @@ export default function ScooterPopup({ scooter, onClose, onReserved }) {
       setReserved(true);
       onReserved?.();
 
-      // Automatycznie odśwież po 5 minutach
       setTimeout(
         () => {
           setReserved(false);
@@ -70,7 +69,7 @@ export default function ScooterPopup({ scooter, onClose, onReserved }) {
         <div className="flex justify-between">
           <span className="text-gray-600">Bateria:</span>
           <span className={`font-semibold ${getBatteryColor()}`}>
-            🔋 {scooter.battery}%
+            {scooter.battery}%
           </span>
         </div>
 
@@ -84,8 +83,8 @@ export default function ScooterPopup({ scooter, onClose, onReserved }) {
             }`}
           >
             {reserved || scooter.status === "reserved"
-              ? "🔴 Zarezerwowana"
-              : "🟢 Dostępna"}
+              ? "Zarezerwowana"
+              : "Dostępna"}
           </span>
         </div>
       </div>
@@ -120,10 +119,10 @@ export default function ScooterPopup({ scooter, onClose, onReserved }) {
           hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {loading
-          ? "⏳ Rezerwowanie..."
+          ? "Rezerwowanie..."
           : reserved
-            ? "✅ Zarezerwowana"
-            : "📍 Zarezerwuj na 5 min"}
+            ? "Zarezerwowana"
+            : "Zarezerwuj na 5 min"}
       </button>
     </div>
   );

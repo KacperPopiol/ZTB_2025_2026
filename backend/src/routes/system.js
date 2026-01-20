@@ -3,6 +3,10 @@ import { systemState } from "../utils/systemState.js";
 
 const router = express.Router();
 
+// ━━━━━━━━━━━━━━━━━━━━━━
+// Status działania Redis
+// ━━━━━━━━━━━━━━━━━━━━━━
+
 // GET /api/system/status
 router.get("/status", (req, res) => {
   res.json({

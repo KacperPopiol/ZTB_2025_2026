@@ -8,7 +8,6 @@ import {
 import { getScootersInBounds } from "../services/api";
 import ScooterMarker from "./ScooterMarker";
 
-// Progi zoomu dla ilości ładowanych hulajnóg
 const ZOOM_THRESHOLDS = {
   SHOW_100: 12,          // < zoom 12: 100 hulajnóg
   SHOW_300: 13,          // zoom 12-13: 300 hulajnóg
@@ -73,7 +72,6 @@ export default function Map({ minBattery, status, model, sortBy }) {
   const [zoom, setZoom] = useState(14);
   const [scooterCount, setScooterCount] = useState(0);
 
-  // Domyślne współrzędne (Nowy Sącz)
   const DEFAULT_LAT = 49.6215;
   const DEFAULT_LON = 20.6969;
 
@@ -103,7 +101,7 @@ export default function Map({ minBattery, status, model, sortBy }) {
     modelFilter, 
     sortByFilter
   ) => {
-    // Anuluj poprzednie żądanie jeśli jeszcze trwa
+    
     if (lastRequestRef.current) {
       lastRequestRef.current.cancel = true;
     }
@@ -116,7 +114,6 @@ export default function Map({ minBattery, status, model, sortBy }) {
     try {
       const limit = getLimitForZoom(currentZoom);
       
-      // Przygotuj bounds dla API
       const boundsData = {
         north: bounds.getNorth(),
         south: bounds.getSouth(),
@@ -130,14 +127,12 @@ export default function Map({ minBattery, status, model, sortBy }) {
         statusFilter || status
       );
 
-      // Sprawdź czy to żądanie nie zostało anulowane
       if (lastRequestRef.current?.id !== requestId || lastRequestRef.current?.cancel) {
         return;
       }
 
       let filteredScooters = response.scooters || [];
 
-      // Dodatkowe filtrowanie po baterii i modelu (client-side)
       if (battery > 0) {
         filteredScooters = filteredScooters.filter(s => s.battery >= battery);
       }
@@ -146,11 +141,9 @@ export default function Map({ minBattery, status, model, sortBy }) {
         filteredScooters = filteredScooters.filter(s => s.model === modelFilter);
       }
 
-      // Sortowanie (jeśli potrzebne)
       if (sortByFilter === 'battery') {
         filteredScooters.sort((a, b) => b.battery - a.battery);
       } else if (sortByFilter === 'distance') {
-        // Sortuj po odległości od centrum mapy
         filteredScooters.sort((a, b) => {
           const distA = Math.sqrt(
             Math.pow(a.latitude - lat, 2) + Math.pow(a.longitude - lon, 2)
@@ -181,7 +174,6 @@ export default function Map({ minBattery, status, model, sortBy }) {
   };
 
   useEffect(() => {
-    // Początkowe załadowanie - używamy placeholder bounds
     const initialBounds = {
       north: DEFAULT_LAT + 0.05,
       south: DEFAULT_LAT - 0.05,
@@ -225,7 +217,7 @@ export default function Map({ minBattery, status, model, sortBy }) {
       {/* Informacja o ładowaniu */}
       {loading && (
         <div className="absolute top-4 left-4 z-[1000] bg-white px-4 py-2 rounded-lg shadow-md">
-          ⏳ Aktualizowanie mapy...
+          Aktualizowanie mapy...
         </div>
       )}
 

@@ -1,4 +1,4 @@
-// Prosty obiekt trzymający stan w pamięci
+// Status Redis
 export const systemState = {
-  redisEnabled: true, // Domyślnie włączony przy starcie serwera
+  redisEnabled: true,
 };

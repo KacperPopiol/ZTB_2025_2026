@@ -17,7 +17,6 @@ export default function Profile() {
   const [reservations, setReservations] = useState([]);
   const [activeTab, setActiveTab] = useState("profile");
 
-  // Form states
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [oldPassword, setOldPassword] = useState("");
@@ -148,7 +147,7 @@ export default function Profile() {
               onClick={() => navigate("/")}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
             >
-              🗺️ Mapa
+              Mapa
             </button>
             <button
               onClick={handleLogout}
@@ -326,7 +325,7 @@ export default function Profile() {
                 <div>
                   <h3 className="text-lg font-semibold mb-4">Doładuj portfel</h3>
                   <p className="text-sm text-gray-600 mb-4">
-                    Wybierz kwotę do doładowania (demo - bez rzeczywistej płatności)
+                    Wybierz kwotę do doładowania
                   </p>
                   <div className="grid grid-cols-3 gap-4">
                     {[5, 10, 15].map((amount) => (

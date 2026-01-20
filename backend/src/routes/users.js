@@ -12,7 +12,7 @@ import {
 const router = express.Router();
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// GET /api/users/me - Pobierz dane zalogowanego użytkownika
+// GET /api/users/me - Pobranie danych zalogowanego użytkownika
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 router.get('/me', authenticateToken, requireUser, async (req, res) => {
   try {
@@ -33,7 +33,7 @@ router.get('/me', authenticateToken, requireUser, async (req, res) => {
 });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// PUT /api/users/me - Aktualizuj dane zalogowanego użytkownika
+// PUT /api/users/me - Aktualizacja danych zalogowanego użytkownika
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 router.put('/me', authenticateToken, requireUser, async (req, res) => {
   try {
@@ -63,7 +63,7 @@ router.put('/me', authenticateToken, requireUser, async (req, res) => {
 });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// POST /api/users/me/change-password - Zmień hasło
+// POST /api/users/me/change-password - Zmiana hasła
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 router.post('/me/change-password', authenticateToken, requireUser, async (req, res) => {
   try {
@@ -99,7 +99,7 @@ router.post('/me/change-password', authenticateToken, requireUser, async (req, r
 });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// DELETE /api/users/me - Usuń swoje konto
+// DELETE /api/users/me - Usunięcie konta
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 router.delete('/me', authenticateToken, requireUser, async (req, res) => {
   try {
@@ -141,7 +141,7 @@ router.post('/me/wallet', authenticateToken, requireUser, async (req, res) => {
 // ADMIN ROUTES
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-// GET /api/users - Pobierz wszystkich użytkowników (tylko admin)
+// GET /api/users - Pobranie wszystkich użytkowników (tylko admin)
 router.get('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
@@ -159,7 +159,7 @@ router.get('/', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-// GET /api/users/:userId - Pobierz użytkownika po ID (tylko admin)
+// GET /api/users/:userId - Pobranie użytkownika po ID (tylko admin)
 router.get('/:userId', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -179,7 +179,7 @@ router.get('/:userId', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-// PUT /api/users/:userId - Aktualizuj użytkownika (tylko admin)
+// PUT /api/users/:userId - Aktualizacja użytkownika (tylko admin)
 router.put('/:userId', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -209,7 +209,7 @@ router.put('/:userId', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-// DELETE /api/users/:userId - Usuń użytkownika (tylko admin)
+// DELETE /api/users/:userId - Usunięcie użytkownika (tylko admin)
 router.delete('/:userId', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;

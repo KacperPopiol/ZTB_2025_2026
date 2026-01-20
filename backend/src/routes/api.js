@@ -63,7 +63,7 @@ router.post("/init", async (req, res) => {
   }
 });
 
-// POST /api/seed - Wygeneruj przykładowe dane
+// POST /api/seed - Generowanie przykładowych danych
 router.post("/seed", async (req, res) => {
   try {
     await seedScooters();

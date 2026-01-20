@@ -7,11 +7,10 @@ import { deductFromWallet, getUserById } from './userService.js';
 import { updateScooterStatus } from './scooterService.js';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Pobierz aktywną jazdę użytkownika
+// Pobranie katywnej jazdy użytkownika
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function getActiveRideByUser(userId) {
   try {
-    // Sprawdź Redis (jeśli włączony)
     const rideId = await redis.get(`ride:user:${userId}`);
     if (rideId) {
       const ride = await getRideById(rideId);
@@ -20,7 +19,6 @@ export async function getActiveRideByUser(userId) {
       }
     }
 
-    // Sprawdź DynamoDB (zawsze jako fallback lub gdy Redis wyłączony)
     const command = new QueryCommand({
       TableName: TABLES.RIDES,
       IndexName: 'UserIndex',
@@ -50,7 +48,7 @@ export async function getActiveRideByUser(userId) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Pobierz jazdę po ID
+// Pobranie jazdy po ID
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function getRideById(rideId) {
   try {
@@ -73,7 +71,7 @@ export async function getRideById(rideId) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Zakończ jazdę
+// Zakończenie jazdy
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function endRide(rideId, userId) {
   try {
@@ -141,7 +139,6 @@ export async function endRide(rideId, userId) {
 
     await docClient.send(command);
 
-    // Usuń z Redis (wrapper zignoruje jeśli wyłączony)
     await redis.del(`ride:user:${userId}`);
     await redis.del(`ride:scooter:${ride.scooterId}`);
     await redis.del(`ride:charge:${rideId}`);
@@ -166,7 +163,7 @@ export async function endRide(rideId, userId) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Pobierz opłatę za minutę
+// Pobranie opłaty za minutę
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function getRidePerMinutePrice() {
   const pricing = await getPricing();
@@ -174,7 +171,7 @@ export async function getRidePerMinutePrice() {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Pobierz opłatę za aktywną jazdę (co minutę)
+// Pobranie opłaty za aktywną jazdę (co minutę)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function chargeForActiveRides() {
   try {
@@ -265,7 +262,7 @@ export async function chargeForActiveRides() {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Pobierz wszystkie jazdy użytkownika
+// Pobranie wszystkich jazd użytkownika
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function getUserRides(userId, limit = 20) {
   try {

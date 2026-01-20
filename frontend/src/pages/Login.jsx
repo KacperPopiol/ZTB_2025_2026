@@ -134,14 +134,14 @@ function Login() {
                 onClick={() => handleDemoLogin("user")}
                 className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
               >
-                👤 Użytkownik
+                Użytkownik
               </button>
               <button
                 type="button"
                 onClick={() => handleDemoLogin("admin")}
                 className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
               >
-                👑 Administrator
+                Administrator
               </button>
             </div>
           </div>

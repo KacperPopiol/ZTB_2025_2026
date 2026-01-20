@@ -136,9 +136,8 @@ async function deleteTable(tableName) {
   try {
     const command = new DeleteTableCommand({ TableName: tableName });
     await client.send(command);
-    console.log(`🗑️  Usunięto tabelę: ${tableName}`);
+    console.log(`Usunięto tabelę: ${tableName}`);
 
-    // Czekaj na usunięcie tabeli
     await new Promise((resolve) => setTimeout(resolve, 2000));
   } catch (error) {
     if (error.name !== 'ResourceNotFoundException') {
@@ -151,12 +150,11 @@ async function createTable(tableDefinition) {
   try {
     const command = new CreateTableCommand(tableDefinition);
     await client.send(command);
-    console.log(`✅ Utworzono tabelę: ${tableDefinition.TableName}`);
+    console.log(`Utworzono tabelę: ${tableDefinition.TableName}`);
 
-    // Czekaj na aktywację tabeli
     await waitForTableActive(tableDefinition.TableName);
   } catch (error) {
-    console.error(`❌ Błąd tworzenia tabeli ${tableDefinition.TableName}:`, error.message);
+    console.error(`Błąd tworzenia tabeli ${tableDefinition.TableName}:`, error.message);
     throw error;
   }
 }
@@ -168,14 +166,14 @@ async function waitForTableActive(tableName, maxAttempts = 30) {
       const response = await client.send(command);
 
       if (response.Table.TableStatus === 'ACTIVE') {
-        console.log(`✅ Tabela ${tableName} jest aktywna`);
+        console.log(`Tabela ${tableName} jest aktywna`);
         return;
       }
 
-      console.log(`⏳ Czekam na aktywację tabeli ${tableName}... (${i + 1}/${maxAttempts})`);
+      console.log(`Czekam na aktywację tabeli ${tableName}... (${i + 1}/${maxAttempts})`);
       await new Promise((resolve) => setTimeout(resolve, 2000));
     } catch (error) {
-      console.error(`❌ Błąd sprawdzania statusu tabeli ${tableName}:`, error.message);
+      console.error(`Błąd sprawdzania statusu tabeli ${tableName}:`, error.message);
       throw error;
     }
   }
@@ -188,7 +186,7 @@ async function waitForTableActive(tableName, maxAttempts = 30) {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 export async function initializeDynamoDB(reset = false) {
-  console.log('\n🚀 Inicjalizacja DynamoDB...\n');
+  console.log('\nInicjalizacja DynamoDB...\n');
 
   try {
     for (const tableDefinition of tableDefinitions) {
@@ -196,27 +194,26 @@ export async function initializeDynamoDB(reset = false) {
       const exists = await tableExists(tableName);
 
       if (exists && reset) {
-        console.log(`⚠️  Tabela ${tableName} istnieje - usuwanie...`);
+        console.log(`Tabela ${tableName} istnieje - usuwanie...`);
         await deleteTable(tableName);
       }
 
       if (!exists || reset) {
-        console.log(`📦 Tworzenie tabeli: ${tableName}...`);
+        console.log(`Tworzenie tabeli: ${tableName}...`);
         await createTable(tableDefinition);
       } else {
-        console.log(`✓  Tabela ${tableName} już istnieje`);
+        console.log(`Tabela ${tableName} już istnieje`);
       }
     }
 
-    console.log('\n✅ Inicjalizacja DynamoDB zakończona!\n');
+    console.log('\nInicjalizacja DynamoDB zakończona!\n');
     return true;
   } catch (error) {
-    console.error('\n❌ Błąd inicjalizacji DynamoDB:', error);
+    console.error('\nBłąd inicjalizacji DynamoDB:', error);
     return false;
   }
 }
 
-// Uruchom jeśli wywołano bezpośrednio
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const reset = process.argv.includes('--reset');
   initializeDynamoDB(reset)

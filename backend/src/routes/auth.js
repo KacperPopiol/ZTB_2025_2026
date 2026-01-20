@@ -32,7 +32,7 @@ router.post('/register', async (req, res) => {
     // Tylko admin może tworzyć innych adminów
     const userRole = role === 'admin' ? 'user' : role;
 
-    // Utwórz użytkownika
+    // Tworzenie użytkownika
     const user = await createUser({
       email,
       password,
@@ -41,7 +41,7 @@ router.post('/register', async (req, res) => {
       role: userRole,
     });
 
-    // Wygeneruj token
+    // Generowanie tokenu
     const token = generateToken({
       userId: user.userId,
       email: user.email,
@@ -85,26 +85,26 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Pobierz użytkownika
+    // Pobranie użytkownika
     const user = await getUserByEmail(email);
 
     if (!user) {
       return res.status(401).json({ error: 'Nieprawidłowy email lub hasło' });
     }
 
-    // Sprawdź czy konto jest aktywne
+    // Sprawdzenie czy konto jest aktywne
     if (!user.isActive) {
       return res.status(403).json({ error: 'Konto zostało dezaktywowane' });
     }
 
-    // Weryfikuj hasło
+    // Weryfikacja hasła
     const isValidPassword = await verifyPassword(password, user.password);
 
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Nieprawidłowy email lub hasło' });
     }
 
-    // Wygeneruj token
+    // Generowanie tokenu
     const token = generateToken({
       userId: user.userId,
       email: user.email,
